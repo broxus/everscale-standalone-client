@@ -60,7 +60,7 @@ export const SUPPORTED_PERMISSIONS: ton.Permission[] = ['tonClient'];
 /**
  * @category Client
  */
-export class StandaloneTonClient extends SafeEventEmitter implements ton.Provider {
+export class TonStandaloneClient extends SafeEventEmitter implements ton.Provider {
   private _context: Context;
   private _handlers: { [K in ton.ProviderMethod]?: ProviderHandler<K> } = {
     requestPermissions,
@@ -88,11 +88,11 @@ export class StandaloneTonClient extends SafeEventEmitter implements ton.Provide
     verifySignature,
   };
 
-  public static async create(params: TonClientProperties): Promise<StandaloneTonClient> {
+  public static async create(params: TonClientProperties): Promise<TonStandaloneClient> {
     await ensureNekotonLoaded();
 
     // NOTE: capture client inside notify using wrapper object
-    let notificationContext: { client?: WeakRef<StandaloneTonClient> } = {};
+    let notificationContext: { client?: WeakRef<TonStandaloneClient> } = {};
 
     const notify = <T extends ton.ProviderEvent>(method: T, params: ton.RawProviderEventData<T>) => {
       notificationContext.client?.deref()?.emit(method, params);
@@ -103,7 +103,7 @@ export class StandaloneTonClient extends SafeEventEmitter implements ton.Provide
     const connectionController = await createConnectionController(clock, params.connection);
     const subscriptionController = new SubscriptionController(connectionController, notify);
 
-    const client = new StandaloneTonClient({
+    const client = new TonStandaloneClient({
       clock,
       permissions: {},
       connectionController,
