@@ -1,0 +1,31 @@
+{
+  "name": "ton-standalone-client",
+  "version": "1.0.0",
+  "repository": "https://github.com/broxus/ton-standalone-client",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "typedoc && tsc",
+    "lint": "eslint"
+  },
+  "author": "",
+  "license": "GPL-3.0",
+  "devDependencies": {
+    "@types/events": "^3.0.0",
+    "@typescript-eslint/eslint-plugin": "^5.3.1",
+    "eslint": "^8.2.0",
+    "eslint-config-prettier": "^8.3.0",
+    "typedoc": "^0.22.8",
+    "typescript": "^4.4.4"
+  },
+  "files": [
+    "/dist"
+  ],
+  "dependencies": {
+    "@broxus/await-semaphore": "^0.1.4",
+    "events": "^3.3.0",
+    "fast-safe-stringify": "^2.1.1",
+    "nekoton-wasm": "^0.1.8",
+    "ton-inpage-provider": "^0.2.2"
+  }
+}
