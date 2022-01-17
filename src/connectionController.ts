@@ -5,148 +5,88 @@ import { GqlSocket, GqlSocketParams } from './gql';
 
 export const DEFAULT_NETWORK_GROUP = 'mainnet';
 
-const NETWORK_PRESETS: { [presetId: number]: ConnectionData } = {
-  [0]: {
-    name: 'Mainnet (GQL 1)',
+/**
+ * @category Client
+ */
+export const NETWORK_PRESETS = {
+  mainnet: {
     group: 'mainnet',
     type: 'graphql',
     data: {
-      endpoint: 'https://main.ton.dev/graphql',
-      timeout: 60000,
+      endpoints: ['main2.ton.dev', 'main3.ton.dev', 'main4.ton.dev'],
+      latencyDetectionInterval: 60000,
       local: false,
     },
   } as ConnectionData,
-  [1]: {
-    name: 'Mainnet (GQL 2)',
-    group: 'mainnet',
-    type: 'graphql',
-    data: {
-      endpoint: 'https://main2.ton.dev/graphql',
-      timeout: 60000,
-      local: false,
-    },
-  } as ConnectionData,
-  [2]: {
-    name: 'Mainnet (GQL 3)',
-    group: 'mainnet',
-    type: 'graphql',
-    data: {
-      endpoint: 'https://main3.ton.dev/graphql',
-      timeout: 60000,
-      local: false,
-    },
-  } as ConnectionData,
-  [4]: {
-    name: 'Testnet',
+  testnet: {
     group: 'testnet',
     type: 'graphql',
     data: {
-      endpoint: 'https://net.ton.dev/graphql',
-      timeout: 60000,
+      endpoints: ['eri01.net.everos.dev', 'rbx01.net.everos.dev', 'gra01.net.everos.dev'],
+      latencyDetectionInterval: 60000,
       local: false,
     },
   } as ConnectionData,
-  [5]: {
-    name: 'fld.ton.dev',
+  fld: {
     group: 'fld',
     type: 'graphql',
     data: {
-      endpoint: 'https://gql.custler.net/graphql',
-      timeout: 60000,
+      endpoints: ['gql.custler.net'],
+      latencyDetectionInterval: 60000,
       local: false,
     },
   } as ConnectionData,
-  [100]: {
-    name: 'Local node',
+  local: {
     group: 'localnet',
     type: 'graphql',
     data: {
-      endpoint: 'http://127.0.0.1/graphql',
-      timeout: 60000,
+      endpoints: ['127.0.0.1'],
+      latencyDetectionInterval: 60000,
       local: true,
     },
   } as ConnectionData,
-};
+} as const;
 
 /**
  * @category Client
  */
-export type TonClientConnectionProperties = {
-  /**
-   * Target network group.
-   *
-   * Will be `mainnet` if not specified
-   */
-  networkGroup?: string;
-  /**
-   * Target preset id.
-   *
-   * **NOTE:** `networkGroup` is ignored if preset id is specified
-   */
-  presetId?: number;
-  /**
-   * Additional network configurations.
-   *
-   * **NOTE**: object must contain unique preset ids. To be sure that they do not overlap with existing presets,
-   * use IDs starting from 1000
-   */
-  additionalPresets?: { [presetId: number]: ConnectionData }
-};
+export type ConnectionProperties = (keyof typeof NETWORK_PRESETS) | ConnectionData
 
 export async function createConnectionController(
   clock: nt.ClockWithOffset,
-  params: TonClientConnectionProperties,
+  params: ConnectionProperties,
+  retry: boolean = false,
 ): Promise<ConnectionController> {
-  const presets: typeof NETWORK_PRESETS = { ...NETWORK_PRESETS };
+  let preset: ConnectionData;
 
-  // Extend presets with additional presets
-  if (params.additionalPresets != null) {
-    for (const [key, value] of Object.entries(params.additionalPresets)) {
-      const mappedPresets = presets as { [key: string]: ConnectionData };
-      if (mappedPresets[key]) {
-        throw new Error(`Connection preset with id ${key} already exists`);
-      }
-      mappedPresets[key] = value;
-    }
-  }
-
-  // Select presets
-  let availablePresets: ConnectionData[];
-  if (params.presetId != null) {
-    const targetPreset = presets[params.presetId] as ConnectionData | undefined;
+  if (typeof params === 'string') {
+    const targetPreset = NETWORK_PRESETS[params] as ConnectionData | undefined;
     if (targetPreset == null) {
-      throw new Error(`Target preset id not found: ${params.presetId}`);
+      throw new Error(`Target preset id not found: ${params}`);
     }
-    availablePresets = [targetPreset];
+    preset = targetPreset;
   } else {
-    availablePresets = selectPresetsByGroup(presets, params.networkGroup || DEFAULT_NETWORK_GROUP);
+    preset = params;
   }
-
-  console.debug('Available presets:', availablePresets);
 
   // Try connect
   while (true) {
     try {
-      for (const preset of availablePresets) {
-        console.debug(`Connecting to ${preset.name} ...`);
-
-        try {
-          const controller = new ConnectionController(clock);
-          await controller.startSwitchingNetwork(preset).then((handle) => handle.switch());
-          console.log(`Successfully connected to ${preset.name}`);
-          return controller;
-        } catch (e: any) {
-          console.error('Connection failed:', e);
-        }
+      const controller = new ConnectionController(clock);
+      await controller.startSwitchingNetwork(preset).then((handle) => handle.switch());
+      console.debug(`Successfully connected to ${preset.group}`);
+      return controller;
+    } catch (e: any) {
+      if (retry) {
+        console.error('Connection failed:', e);
+        await new Promise<void>((resolve) => {
+          setTimeout(() => resolve(), 5000);
+        });
+        console.log('Restarting connection process');
+      } else {
+        throw e;
       }
-    } catch (_e) {
-      console.error('Failed to select initial connection. Retrying in 5s');
     }
-
-    await new Promise<void>((resolve) => {
-      setTimeout(() => resolve(), 5000);
-    });
-    console.log('Restarting connection process');
   }
 }
 
@@ -252,7 +192,6 @@ export class ConnectionController {
           shouldTest: !params.data.local,
           transport,
           transportData: {
-            group: params.group,
             type: 'graphql',
             data: {
               socket,
@@ -308,9 +247,6 @@ interface INetworkSwitchHandle {
   switch(): Promise<void>;
 }
 
-const selectPresetsByGroup = (presets: { [presetId: number]: ConnectionData }, group: string): ConnectionData[] =>
-  Object.values(presets).filter(item => item.group == group);
-
 function requireInitializedTransport(transport?: InitializedTransport): asserts transport is InitializedTransport {
   if (transport == null) {
     throw new Error('Connection is not initialized');
@@ -320,7 +256,7 @@ function requireInitializedTransport(transport?: InitializedTransport): asserts 
 /**
  * @category Client
  */
-export type ConnectionData = { name: string; group: string } & (
+export type ConnectionData = { group: string } & (
   | nt.EnumItem<'graphql', GqlSocketParams>
   )
 

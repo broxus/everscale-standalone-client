@@ -1,19 +1,19 @@
 import init, * as nt from 'nekoton-wasm';
 import safeStringify from 'fast-safe-stringify';
 
-import ton from 'ton-inpage-provider';
+import ever from 'everscale-inpage-provider';
 
 import { convertVersionToInt32, SafeEventEmitter } from './utils';
 import {
   createConnectionController,
   DEFAULT_NETWORK_GROUP,
-  TonClientConnectionProperties,
+  ConnectionProperties,
   ConnectionController,
 } from './connectionController';
 import { SubscriptionController } from './subscriptionController';
 
 export { GqlSocketParams } from './gql';
-export { TonClientConnectionProperties, ConnectionData } from './connectionController';
+export { ConnectionData, ConnectionProperties, NETWORK_PRESETS } from './connectionController';
 
 let clientInitializationStarted: boolean = false;
 let notifyClientInitialized: { resolve: () => void, reject: () => void };
@@ -34,35 +34,32 @@ function ensureNekotonLoaded(): Promise<void> {
  *
  * @category Client
  */
-export type TonClientProperties = {
-  connection: TonClientConnectionProperties
+export type ClientProperties = {
+  connection: ConnectionProperties
 };
 
 /**
  * @category Client
  */
-export const DEFAULT_TON_CLIENT_PROPERTIES: TonClientProperties = {
-  connection: {
-    networkGroup: DEFAULT_NETWORK_GROUP,
-    additionalPresets: {},
-  },
+export const DEFAULT_CLIENT_PROPERTIES: ClientProperties = {
+  connection: DEFAULT_NETWORK_GROUP,
 };
 
 /**
  * @category Client
  */
-export const TON_CLIENT_VERSION = '0.2.17';
+export const VERSION = '0.2.25';
 /**
  * @category Client
  */
-export const SUPPORTED_PERMISSIONS: ton.Permission[] = ['tonClient'];
+export const SUPPORTED_PERMISSIONS: ever.Permission[] = ['basic'];
 
 /**
  * @category Client
  */
-export class TonStandaloneClient extends SafeEventEmitter implements ton.Provider {
+export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.Provider {
   private _context: Context;
-  private _handlers: { [K in ton.ProviderMethod]?: ProviderHandler<K> } = {
+  private _handlers: { [K in ever.ProviderMethod]?: ProviderHandler<K> } = {
     requestPermissions,
     disconnect,
     subscribe,
@@ -70,7 +67,9 @@ export class TonStandaloneClient extends SafeEventEmitter implements ton.Provide
     unsubscribeAll,
     getProviderState,
     getFullContractState,
+    getAccountsByCodeHash,
     getTransactions,
+    getTransaction,
     runLocal,
     getExpectedAddress,
     getBocHash,
@@ -88,13 +87,13 @@ export class TonStandaloneClient extends SafeEventEmitter implements ton.Provide
     verifySignature,
   };
 
-  public static async create(params: TonClientProperties): Promise<TonStandaloneClient> {
+  public static async create(params: ClientProperties): Promise<EverscaleStandaloneClient> {
     await ensureNekotonLoaded();
 
     // NOTE: capture client inside notify using wrapper object
-    let notificationContext: { client?: WeakRef<TonStandaloneClient> } = {};
+    let notificationContext: { client?: WeakRef<EverscaleStandaloneClient> } = {};
 
-    const notify = <T extends ton.ProviderEvent>(method: T, params: ton.RawProviderEventData<T>) => {
+    const notify = <T extends ever.ProviderEvent>(method: T, params: ever.RawProviderEventData<T>) => {
       notificationContext.client?.deref()?.emit(method, params);
     };
 
@@ -103,7 +102,7 @@ export class TonStandaloneClient extends SafeEventEmitter implements ton.Provide
     const connectionController = await createConnectionController(clock, params.connection);
     const subscriptionController = new SubscriptionController(connectionController, notify);
 
-    const client = new TonStandaloneClient({
+    const client = new EverscaleStandaloneClient({
       clock,
       permissions: {},
       connectionController,
@@ -119,7 +118,7 @@ export class TonStandaloneClient extends SafeEventEmitter implements ton.Provide
     this._context = ctx;
   }
 
-  request<T extends ton.ProviderMethod>(req: ton.RawProviderRequest<T>): Promise<ton.RawProviderApiResponse<T>> {
+  request<T extends ever.ProviderMethod>(req: ever.RawProviderRequest<T>): Promise<ever.RawProviderApiResponse<T>> {
     const handler = this._handlers[req.method] as any as ProviderHandler<T> | undefined;
     if (handler == null) {
       throw invalidRequest(req, `Method '${req.method}' is not supported by standalone provider`);
@@ -130,13 +129,13 @@ export class TonStandaloneClient extends SafeEventEmitter implements ton.Provide
 
 type Context = {
   clock: nt.ClockWithOffset,
-  permissions: Partial<ton.RawPermissions>,
+  permissions: Partial<ever.RawPermissions>,
   connectionController: ConnectionController,
   subscriptionController: SubscriptionController,
-  notify: <T extends ton.ProviderEvent>(method: T, params: ton.RawProviderEventData<T>) => void
+  notify: <T extends ever.ProviderEvent>(method: T, params: ever.RawProviderEventData<T>) => void
 }
 
-type ProviderHandler<T extends ton.ProviderMethod> = (ctx: Context, req: ton.RawProviderRequest<T>) => Promise<ton.RawProviderApiResponse<T>>;
+type ProviderHandler<T extends ever.ProviderMethod> = (ctx: Context, req: ever.RawProviderRequest<T>) => Promise<ever.RawProviderApiResponse<T>>;
 
 const requestPermissions: ProviderHandler<'requestPermissions'> = async (ctx, req) => {
   requireParams(req);
@@ -147,8 +146,8 @@ const requestPermissions: ProviderHandler<'requestPermissions'> = async (ctx, re
   const newPermissions = { ...ctx.permissions };
 
   for (const permission of permissions) {
-    if (permission === 'tonClient') {
-      newPermissions.tonClient = true;
+    if (permission === 'basic' || (permission as any) === 'tonClient') {
+      newPermissions.basic = true;
     } else {
       throw invalidRequest(req, `Permission '${permission}' is not supported by standalone provider`);
     }
@@ -213,7 +212,7 @@ const getProviderState: ProviderHandler<'getProviderState'> = async (ctx, req) =
     throw invalidRequest(req, 'Connection controller was not initialized');
   }
 
-  const version = TON_CLIENT_VERSION;
+  const version = VERSION;
 
   return {
     version,
@@ -242,6 +241,24 @@ const getFullContractState: ProviderHandler<'getFullContractState'> = async (ctx
   }
 };
 
+const getAccountsByCodeHash: ProviderHandler<'getAccountsByCodeHash'> = async (ctx, req) => {
+  requireParams(req);
+
+  const { codeHash, limit, continuation } = req.params;
+  requireString(req, req.params, 'codeHash');
+  requireOptionalNumber(req, req.params, 'limit');
+  requireOptionalString(req, req.params, 'continuation');
+
+  const { connectionController } = ctx;
+
+  try {
+    return connectionController.use(({ data: { transport } }) =>
+      transport.getAccountsByCodeHash(codeHash, limit || 50, continuation));
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
 const getTransactions: ProviderHandler<'getTransactions'> = async (ctx, req) => {
   requireParams(req);
 
@@ -253,8 +270,26 @@ const getTransactions: ProviderHandler<'getTransactions'> = async (ctx, req) => 
   const { connectionController } = ctx;
 
   try {
-    return connectionController.use(async ({ data: { transport } }) =>
+    return connectionController.use(({ data: { transport } }) =>
       transport.getTransactions(address, continuation, limit || 50));
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
+const getTransaction: ProviderHandler<'getTransaction'> = async (ctx, req) => {
+  requireParams(req);
+
+  const { hash } = req.params;
+  requireString(req, req.params, 'hash');
+
+  const { connectionController } = ctx;
+
+  try {
+    return {
+      transaction: await connectionController.use(({ data: { transport } }) =>
+        transport.getTransaction(hash)),
+    };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -496,55 +531,55 @@ const verifySignature: ProviderHandler<'verifySignature'> = async (_ctx, req) =>
 };
 
 
-function requireParams<T extends ton.ProviderMethod>(req: any): asserts req is ton.RawProviderRequest<T> {
+function requireParams<T extends ever.ProviderMethod>(req: any): asserts req is ever.RawProviderRequest<T> {
   if (req.params == null || typeof req.params !== 'object') {
     throw invalidRequest(req, 'required params object');
   }
 }
 
-function requireObject<O, P extends keyof O>(req: ton.RawProviderRequest<ton.ProviderMethod>, object: O, key: P) {
+function requireObject<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (typeof property !== 'object') {
     throw invalidRequest(req, `'${key}' must be an object`);
   }
 }
 
-function requireOptionalObject<O, P extends keyof O>(req: ton.RawProviderRequest<ton.ProviderMethod>, object: O, key: P) {
+function requireOptionalObject<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (property != null && typeof property !== 'object') {
     throw invalidRequest(req, `'${key}' must be an object if specified`);
   }
 }
 
-function requireBoolean<O, P extends keyof O>(req: ton.RawProviderRequest<ton.ProviderMethod>, object: O, key: P) {
+function requireBoolean<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (typeof property !== 'boolean') {
     throw invalidRequest(req, `'${key}' must be a boolean`);
   }
 }
 
-function requireString<O, P extends keyof O>(req: ton.RawProviderRequest<ton.ProviderMethod>, object: O, key: P) {
+function requireString<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (typeof property !== 'string' || property.length === 0) {
     throw invalidRequest(req, `'${key}' must be non-empty string`);
   }
 }
 
-function requireOptionalString<O, P extends keyof O>(req: ton.RawProviderRequest<ton.ProviderMethod>, object: O, key: P) {
+function requireOptionalString<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (property != null && (typeof property !== 'string' || property.length === 0)) {
     throw invalidRequest(req, `'${key}' must be a non-empty string if provided`);
   }
 }
 
-function requireOptionalNumber<O, P extends keyof O>(req: ton.RawProviderRequest<ton.ProviderMethod>, object: O, key: P) {
+function requireOptionalNumber<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (property != null && typeof property !== 'number') {
     throw invalidRequest(req, `'${key}' must be a number if provider`);
   }
 }
 
-function requireArray<O, P extends keyof O>(req: ton.RawProviderRequest<ton.ProviderMethod>, object: O, key: P) {
+function requireArray<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (!Array.isArray(property)) {
     throw invalidRequest(req, `'${key}' must be an array`);
@@ -552,10 +587,10 @@ function requireArray<O, P extends keyof O>(req: ton.RawProviderRequest<ton.Prov
 }
 
 function requireOptional<O, P extends keyof O>(
-  req: ton.RawProviderRequest<ton.ProviderMethod>,
+  req: ever.RawProviderRequest<ever.ProviderMethod>,
   object: O,
   key: P,
-  predicate: (req: ton.RawProviderRequest<ton.ProviderMethod>, object: O, key: P) => void,
+  predicate: (req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) => void,
 ) {
   const property = object[key];
   if (property != null) {
@@ -563,7 +598,7 @@ function requireOptional<O, P extends keyof O>(
   }
 }
 
-function requireTransactionId<O, P extends keyof O>(req: ton.RawProviderRequest<ton.ProviderMethod>, object: O, key: P) {
+function requireTransactionId<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   requireObject(req, object, key);
   const property = (object[key] as unknown) as nt.TransactionId;
   requireString(req, property, 'lt');
@@ -571,7 +606,7 @@ function requireTransactionId<O, P extends keyof O>(req: ton.RawProviderRequest<
 }
 
 function requireLastTransactionId<O, P extends keyof O>(
-  req: ton.RawProviderRequest<ton.ProviderMethod>,
+  req: ever.RawProviderRequest<ever.ProviderMethod>,
   object: O,
   key: P,
 ) {
@@ -582,30 +617,30 @@ function requireLastTransactionId<O, P extends keyof O>(
   requireOptionalString(req, property, 'hash');
 }
 
-function requireContractState<O, P extends keyof O>(req: ton.RawProviderRequest<ton.ProviderMethod>, object: O, key: P) {
+function requireContractState<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   requireObject(req, object, key);
-  const property = (object[key] as unknown) as ton.FullContractState;
+  const property = (object[key] as unknown) as ever.FullContractState;
   requireString(req, property, 'balance');
   requireOptional(req, property, 'lastTransactionId', requireLastTransactionId);
   requireBoolean(req, property, 'isDeployed');
 }
 
-function requireFunctionCall<O, P extends keyof O>(req: ton.RawProviderRequest<ton.ProviderMethod>, object: O, key: P) {
+function requireFunctionCall<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   requireObject(req, object, key);
-  const property = (object[key] as unknown) as ton.RawFunctionCall;
+  const property = (object[key] as unknown) as ever.RawFunctionCall;
   requireString(req, property, 'abi');
   requireString(req, property, 'method');
   requireObject(req, property, 'params');
 }
 
-function requireMethodOrArray<O, P extends keyof O>(req: ton.RawProviderRequest<ton.ProviderMethod>, object: O, key: P) {
+function requireMethodOrArray<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (typeof property !== 'string' && !Array.isArray(property)) {
     throw invalidRequest(req, `'${key}' must be a method name or an array of possible names`);
   }
 }
 
-const invalidRequest = (req: ton.RawProviderRequest<ton.ProviderMethod>, message: string, data?: unknown) =>
+const invalidRequest = (req: ever.RawProviderRequest<ever.ProviderMethod>, message: string, data?: unknown) =>
   new NekotonRpcError(2, `${req.method}: ${message}`, data);
 
 class NekotonRpcError<T> extends Error {

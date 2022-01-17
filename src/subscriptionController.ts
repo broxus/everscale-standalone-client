@@ -1,7 +1,7 @@
 import { Mutex } from '@broxus/await-semaphore';
 import * as nt from 'nekoton-wasm';
 
-import ton from 'ton-inpage-provider';
+import ever from 'everscale-inpage-provider';
 
 import { ConnectionController } from './connectionController';
 import { ContractSubscription, IContractHandler } from './subscription';
@@ -10,16 +10,16 @@ const DEFAULT_POLLING_INTERVAL = 10000; // 10s
 
 export class SubscriptionController {
   private readonly _connectionController: ConnectionController;
-  private readonly _notify: <T extends ton.ProviderEvent>(method: T, params: ton.RawProviderEventData<T>) => void;
+  private readonly _notify: <T extends ever.ProviderEvent>(method: T, params: ever.RawProviderEventData<T>) => void;
 
   private readonly _subscriptions: Map<string, ContractSubscription> = new Map();
   private readonly _subscriptionsMutex: Mutex = new Mutex();
   private readonly _sendMessageRequests: Map<string, Map<string, SendMessageCallback>> = new Map();
-  private readonly _subscriptionStates: Map<string, ton.ContractUpdatesSubscription> = new Map();
+  private readonly _subscriptionStates: Map<string, ever.ContractUpdatesSubscription> = new Map();
 
   constructor(
     connectionController: ConnectionController,
-    notify: <T extends ton.ProviderEvent>(method: T, params: ton.RawProviderEventData<T>) => void,
+    notify: <T extends ever.ProviderEvent>(method: T, params: ever.RawProviderEventData<T>) => void,
   ) {
     this._connectionController = connectionController;
     this._notify = notify;
@@ -27,8 +27,8 @@ export class SubscriptionController {
 
   public async subscribeToContract(
     address: string,
-    params: Partial<ton.ContractUpdatesSubscription>,
-  ): Promise<ton.ContractUpdatesSubscription> {
+    params: Partial<ever.ContractUpdatesSubscription>,
+  ): Promise<ever.ContractUpdatesSubscription> {
     return this._subscriptionsMutex.use(async () => {
       let shouldUnsubscribe = true;
 
@@ -83,11 +83,11 @@ export class SubscriptionController {
     }
   }
 
-  public get subscriptionStates(): { [address: string]: ton.ContractUpdatesSubscription } {
+  public get subscriptionStates(): { [address: string]: ever.ContractUpdatesSubscription } {
     return [...this._subscriptionStates].reduce((obj, [key, value]) => {
       obj[key] = value;
       return obj;
-    }, {} as { [address: string]: ton.ContractUpdatesSubscription });
+    }, {} as { [address: string]: ever.ContractUpdatesSubscription });
   }
 
   private async _createSubscription(address: string) {
@@ -208,7 +208,7 @@ export class SubscriptionController {
   }
 }
 
-const makeDefaultSubscriptionState = (): ton.ContractUpdatesSubscription => ({
+const makeDefaultSubscriptionState = (): ever.ContractUpdatesSubscription => ({
   state: false,
   transactions: false,
 });
