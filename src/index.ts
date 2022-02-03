@@ -298,9 +298,10 @@ const getTransaction: ProviderHandler<'getTransaction'> = async (ctx, req) => {
 const runLocal: ProviderHandler<'runLocal'> = async (ctx, req) => {
   requireParams(req);
 
-  const { address, cachedState, functionCall } = req.params;
+  const { address, cachedState, responsible, functionCall } = req.params;
   requireString(req, req.params, 'address');
   requireOptional(req, req.params, 'cachedState', requireContractState);
+  requireOptionalBoolean(req, req.params, 'responsible');
   requireFunctionCall(req, req.params, 'functionCall');
 
   const { clock, connectionController } = ctx;
@@ -321,11 +322,11 @@ const runLocal: ProviderHandler<'runLocal'> = async (ctx, req) => {
   try {
     const { output, code } = nt.runLocal(
       clock,
-      contractState.lastTransactionId,
       contractState.boc,
       functionCall.abi,
       functionCall.method,
       functionCall.params,
+      responsible || false,
     );
     return { output, code };
   } catch (e: any) {
@@ -555,6 +556,13 @@ function requireBoolean<O, P extends keyof O>(req: ever.RawProviderRequest<ever.
   const property = object[key];
   if (typeof property !== 'boolean') {
     throw invalidRequest(req, `'${key}' must be a boolean`);
+  }
+}
+
+function requireOptionalBoolean<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
+  const property = object[key];
+  if (property != null && typeof property !== 'boolean') {
+    throw invalidRequest(req, `'${key}' must be a boolean if specified`);
   }
 }
 
