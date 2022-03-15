@@ -13,7 +13,13 @@ export const NETWORK_PRESETS = {
     group: 'mainnet',
     type: 'graphql',
     data: {
-      endpoints: ['main2.ton.dev', 'main3.ton.dev', 'main4.ton.dev'],
+      endpoints: [
+        'eri01.main.everos.dev',
+        'gra01.main.everos.dev',
+        'gra02.main.everos.dev',
+        'lim01.main.everos.dev',
+        'rbx01.main.everos.dev',
+      ],
       latencyDetectionInterval: 60000,
       local: false,
     },

@@ -20,4 +20,63 @@ npm install --save everscale-inpage-provider everscale-standalone-client
 
 ### Example
 
-**`// TODO`**
+```typescript
+import { Address, ProviderRpcClient, TvmException } from 'everscale-inpage-provider';
+import { EverscaleStandaloneClient } from 'everscale-standalone-client';
+
+const ever = new ProviderRpcClient({
+  fallback: () =>
+    EverscaleStandaloneClient.create({
+      connection: 'mainnet',
+    }),
+});
+
+async function myApp() {
+  await ever.ensureInitialized();
+
+  await ever.requestPermissions({
+    permissions: ['basic'],
+  });
+
+  const dePoolAddress = new Address('0:bbcbf7eb4b6f1203ba2d4ff5375de30a5408a8130bf79f870efbcfd49ec164e9');
+
+  const dePool = new ever.Contract(DePoolAbi, dePoolAddress);
+
+  try {
+    const output = await dePool.methods.getDePoolInfo({}).call();
+    console.log(output);
+  } catch (e) {
+    if (e instanceof TvmException) {
+      console.error(e.code);
+    }
+  }
+}
+
+const DePoolAbi = {
+  'ABI version': 2,
+  header: ['time', 'expire'],
+  functions: [
+    {
+      name: 'getDePoolInfo',
+      inputs: [],
+      outputs: [
+        { name: 'poolClosed', type: 'bool' },
+        { name: 'minStake', type: 'uint64' },
+        { name: 'validatorAssurance', type: 'uint64' },
+        { name: 'participantRewardFraction', type: 'uint8' },
+        { name: 'validatorRewardFraction', type: 'uint8' },
+        { name: 'balanceThreshold', type: 'uint64' },
+        { name: 'validatorWallet', type: 'address' },
+        { name: 'proxies', type: 'address[]' },
+        { name: 'stakeFee', type: 'uint64' },
+        { name: 'retOrReinvFee', type: 'uint64' },
+        { name: 'proxyFee', type: 'uint64' },
+      ],
+    },
+  ],
+  data: [],
+  events: [],
+} as const; // NOTE: `as const` is very important here
+
+myApp().catch(console.error);
+```
