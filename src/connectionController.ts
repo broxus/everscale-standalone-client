@@ -194,16 +194,18 @@ export class ConnectionController {
         const socket = new GqlSocket();
         const transport = await socket.connect(this._clock, params.data);
 
+        const transportData: InitializedTransport = {
+          group: params.group,
+          type: 'graphql',
+          data: {
+            socket,
+            transport,
+          },
+        };
+
         return {
           shouldTest: !params.data.local,
-          transport,
-          transportData: {
-            type: 'graphql',
-            data: {
-              socket,
-              transport,
-            },
-          } as InitializedTransport,
+          transportData,
         };
       })();
 
