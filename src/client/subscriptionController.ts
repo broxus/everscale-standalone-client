@@ -1,7 +1,6 @@
 import { Mutex } from '@broxus/await-semaphore';
+import type ever from 'everscale-inpage-provider';
 import type * as nt from 'nekoton-wasm';
-
-import ever from 'everscale-inpage-provider';
 
 import { ConnectionController } from './connectionController';
 import { ContractSubscription, IContractHandler } from './subscription';
@@ -23,6 +22,49 @@ export class SubscriptionController {
   ) {
     this._connectionController = connectionController;
     this._notify = notify;
+  }
+
+  public async sendMessageLocally(
+    address: string,
+    signedMessage: nt.SignedMessage,
+  ): Promise<nt.Transaction> {
+    await this.subscribeToContract(address, { state: true });
+    const subscription = this._subscriptions.get(address);
+    if (subscription == null) {
+      throw new Error('Failed to subscribe to contract');
+    }
+
+    return await subscription.use((contract) =>
+      contract.sendMessageLocally(signedMessage));
+  }
+
+  public async sendMessage(address: string, signedMessage: nt.SignedMessage) {
+    let messageRequests = await this._sendMessageRequests.get(address);
+    if (messageRequests == null) {
+      messageRequests = new Map();
+      this._sendMessageRequests.set(address, messageRequests);
+    }
+
+    return new Promise<nt.Transaction>(async (resolve, reject) => {
+      const id = signedMessage.hash;
+      messageRequests!.set(id, { resolve, reject });
+
+      await this.subscribeToContract(address, { state: true });
+      const subscription = this._subscriptions.get(address);
+      if (subscription == null) {
+        throw new Error('Failed to subscribe to contract');
+      }
+
+      await subscription.prepareReliablePolling();
+      await subscription
+        .use(async (contract) => {
+          await contract.sendMessage(signedMessage);
+          subscription.skipRefreshTimer();
+        })
+        .catch((e) => {
+          this._rejectMessageRequest(address, id, e);
+        });
+    });
   }
 
   public async subscribeToContract(

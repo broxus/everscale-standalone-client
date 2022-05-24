@@ -1,21 +1,19 @@
-import type * as nt from 'nekoton-wasm';
-import core from './core';
-
 import safeStringify from 'fast-safe-stringify';
-
 import type ever from 'everscale-inpage-provider';
+import type * as nt from 'nekoton-wasm';
 
+import core from '@core';
 import { convertVersionToInt32, SafeEventEmitter } from './utils';
 import {
-  createConnectionController,
   DEFAULT_NETWORK_GROUP,
+  createConnectionController,
   ConnectionProperties,
   ConnectionController,
 } from './connectionController';
 import { SubscriptionController } from './subscriptionController';
 
+export { NETWORK_PRESETS, ConnectionData, ConnectionProperties } from './connectionController';
 export { GqlSocketParams } from './gql';
-export { ConnectionData, ConnectionProperties, NETWORK_PRESETS } from './connectionController';
 
 const { ensureNekotonLoaded, nekoton } = core;
 
@@ -51,6 +49,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
   private _context: Context;
   private _handlers: { [K in ever.ProviderMethod]?: ProviderHandler<K> } = {
     requestPermissions,
+    // changeAccount, // not supported
     disconnect,
     subscribe,
     unsubscribe,
@@ -70,11 +69,20 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     splitTvc,
     encodeInternalInput,
     decodeInput,
-    decodeEvent,
     decodeOutput,
+    decodeEvent,
     decodeTransaction,
     decodeTransactionEvents,
     verifySignature,
+    sendUnsignedExternalMessage,
+    // addAsset, // not supported
+    // signData, // not supported
+    // signDataRaw, // not supported
+    // encryptData, // not supported
+    // decryptData, // not supported
+    // estimateFees, // not supported
+    // sendMessage, // not supported
+    // sendExternalMessage, // not supported
   };
 
   public static async create(params: ClientProperties): Promise<EverscaleStandaloneClient> {
@@ -449,21 +457,6 @@ const decodeInput: ProviderHandler<'decodeInput'> = async (_ctx, req) => {
   }
 };
 
-const decodeEvent: ProviderHandler<'decodeEvent'> = async (_ctx, req) => {
-  requireParams(req);
-
-  const { body, abi, event } = req.params;
-  requireString(req, req.params, 'body');
-  requireString(req, req.params, 'abi');
-  requireMethodOrArray(req, req.params, 'event');
-
-  try {
-    return nekoton.decodeEvent(body, abi, event) || null;
-  } catch (e: any) {
-    throw invalidRequest(req, e.toString());
-  }
-};
-
 const decodeOutput: ProviderHandler<'decodeOutput'> = async (_ctx, req) => {
   requireParams(req);
 
@@ -474,6 +467,21 @@ const decodeOutput: ProviderHandler<'decodeOutput'> = async (_ctx, req) => {
 
   try {
     return nekoton.decodeOutput(body, abi, method) || null;
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
+const decodeEvent: ProviderHandler<'decodeEvent'> = async (_ctx, req) => {
+  requireParams(req);
+
+  const { body, abi, event } = req.params;
+  requireString(req, req.params, 'body');
+  requireString(req, req.params, 'abi');
+  requireMethodOrArray(req, req.params, 'event');
+
+  try {
+    return nekoton.decodeEvent(body, abi, event) || null;
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -519,6 +527,52 @@ const verifySignature: ProviderHandler<'verifySignature'> = async (_ctx, req) =>
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
+};
+
+const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'> = async (ctx, req) => {
+  requireParams(req);
+
+  const { recipient, stateInit, payload, local } = req.params;
+  requireString(req, req.params, 'recipient');
+  requireOptionalString(req, req.params, 'stateInit');
+  requireFunctionCall(req, req.params, 'payload');
+  requireOptionalBoolean(req, req.params, 'local');
+
+  if (!nekoton.checkAddress(recipient)) {
+    throw invalidRequest(req, 'Invalid recipient');
+  }
+
+  const { subscriptionController } = ctx;
+
+  let signedMessage: nt.SignedMessage;
+  try {
+    signedMessage = nekoton.createExternalMessageWithoutSignature(
+      recipient,
+      payload.abi,
+      payload.method,
+      stateInit,
+      payload.params,
+      60,
+    );
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+
+  let transaction: nt.Transaction;
+  if (local === true) {
+    transaction = await subscriptionController.sendMessageLocally(recipient, signedMessage);
+  } else {
+    transaction = await subscriptionController.sendMessage(recipient, signedMessage);
+  }
+
+  let output: ever.RawTokensObject | undefined;
+  try {
+    const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
+    output = decoded?.output;
+  } catch (_) {
+  }
+
+  return { transaction, output };
 };
 
 

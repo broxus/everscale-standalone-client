@@ -1,7 +1,7 @@
 import { Mutex } from '@broxus/await-semaphore';
 import type * as nt from 'nekoton-wasm';
-import core from './core';
 
+import core from '@core';
 import { ConnectionController } from './connectionController';
 
 const { nekoton, debugLog } = core;

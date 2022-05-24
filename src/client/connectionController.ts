@@ -1,12 +1,12 @@
 import { Mutex } from '@broxus/await-semaphore';
 import type * as nt from 'nekoton-wasm';
-import core from './core';
 
+import core from '@core';
 import { GqlSocket, GqlSocketParams } from './gql';
 
-export const DEFAULT_NETWORK_GROUP = 'mainnet';
-
 const { debugLog } = core;
+
+export const DEFAULT_NETWORK_GROUP = 'mainnet';
 
 /**
  * @category Client

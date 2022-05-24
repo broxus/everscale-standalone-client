@@ -1,5 +1,6 @@
 import type * as nt from 'nekoton-wasm';
-import core from './core';
+
+import core from '@core';
 
 const { nekoton, fetch } = core;
 
