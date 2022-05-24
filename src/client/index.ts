@@ -86,7 +86,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     // decryptData, // not supported
     // estimateFees, // not supported
     // sendMessage, // not supported
-    // sendExternalMessage, // not supported
+    sendExternalMessage, // not supported
   };
 
   public static async create(params: ClientProperties): Promise<EverscaleStandaloneClient> {
@@ -548,11 +548,12 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
     throw invalidRequest(req, 'Invalid recipient');
   }
 
-  const { subscriptionController } = ctx;
+  const { clock, subscriptionController } = ctx;
 
   let signedMessage: nt.SignedMessage;
   try {
     signedMessage = nekoton.createExternalMessageWithoutSignature(
+      clock,
       recipient,
       payload.abi,
       payload.method,
@@ -627,6 +628,71 @@ const signDataRaw: ProviderHandler<'signDataRaw'> = async (ctx, req) => {
     throw invalidRequest(req, e.toString());
   }
 };
+
+const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, req) => {
+  requireKeystore(req, ctx);
+  requireParams(req);
+
+  const { publicKey, recipient, stateInit, payload, local } = req.params;
+  requireString(req, req.params, 'publicKey');
+  requireString(req, req.params, 'recipient');
+  requireOptionalString(req, req.params, 'stateInit');
+  requireFunctionCall(req, req.params, 'payload');
+  requireOptionalBoolean(req, req.params, 'local');
+
+  if (!nekoton.checkAddress(recipient)) {
+    throw invalidRequest(req, 'Invalid recipient');
+  }
+
+  const { clock, subscriptionController, keystore } = ctx;
+  const signer = await keystore.getSigner(publicKey);
+  if (signer == null) {
+    throw invalidRequest(req, 'Signer not found for public key');
+  }
+
+  let unsignedMessage: nt.UnsignedMessage;
+  try {
+    unsignedMessage = nekoton.createExternalMessage(
+      clock,
+      recipient,
+      payload.abi,
+      payload.method,
+      stateInit,
+      payload.params,
+      publicKey,
+      60,
+    );
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+
+  let signedMessage: nt.SignedMessage;
+  try {
+    const signature = await signer.sign(unsignedMessage.hash);
+    signedMessage = unsignedMessage.sign(signature);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  } finally {
+    unsignedMessage.free();
+  }
+
+  let transaction: nt.Transaction;
+  if (local === true) {
+    transaction = await subscriptionController.sendMessageLocally(recipient, signedMessage);
+  } else {
+    transaction = await subscriptionController.sendMessage(recipient, signedMessage);
+  }
+
+  let output: ever.RawTokensObject | undefined;
+  try {
+    const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
+    output = decoded?.output;
+  } catch (_) {
+  }
+
+  return { transaction, output };
+};
+
 
 function requireKeystore(req: any, context: Context): asserts context is Context & { keystore: Keystore } {
   if (context.keystore == null) {

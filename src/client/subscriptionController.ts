@@ -83,8 +83,10 @@ export class SubscriptionController {
         const value = params[param];
         if (typeof value === 'boolean') {
           currentParams[param] = value;
+        } else if (value == null) {
+          return;
         } else {
-          throw new Error(`Unknown subscription topic value: ${value}`);
+          throw new Error(`Unknown subscription topic value ${param}: ${value}`);
         }
 
         shouldUnsubscribe &&= !currentParams[param];
@@ -150,7 +152,7 @@ export class SubscriptionController {
       onMessageExpired(pendingTransaction: nt.PendingTransaction) {
         if (this._enabled) {
           this._controller
-            ._rejectMessageRequest(this._address, pendingTransaction.bodyHash, new Error(`Message expired`))
+            ._rejectMessageRequest(this._address, pendingTransaction.messageHash, new Error(`Message expired`))
             .catch(console.error);
         }
       }
@@ -158,7 +160,7 @@ export class SubscriptionController {
       onMessageSent(pendingTransaction: nt.PendingTransaction, transaction: nt.Transaction) {
         if (this._enabled) {
           this._controller
-            ._resolveMessageRequest(this._address, pendingTransaction.bodyHash, transaction)
+            ._resolveMessageRequest(this._address, pendingTransaction.messageHash, transaction)
             .catch(console.error);
         }
       }

@@ -82,7 +82,7 @@ export class ContractSubscription {
               : INTENSIVE_POLLING_INTERVAL;
 
           await new Promise<void>((resolve) => {
-            const timerHandle = window.setTimeout(() => {
+            const timerHandle = setTimeout(() => {
               this._refreshTimer = undefined;
               resolve();
             }, pollingInterval);
@@ -162,7 +162,7 @@ export class ContractSubscription {
   }
 
   public skipRefreshTimer() {
-    window.clearTimeout(this._refreshTimer?.[0]);
+    clearTimeout(this._refreshTimer?.[0]);
     this._refreshTimer?.[1]();
     this._refreshTimer = undefined;
   }
