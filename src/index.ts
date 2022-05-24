@@ -15,6 +15,7 @@ core.ensureNekotonLoaded = (): Promise<void> => {
   return initializationPromise;
 };
 core.nekoton = nt;
+core.fetch = fetch;
 core.debugLog = console.debug;
 
 export * from './client';
