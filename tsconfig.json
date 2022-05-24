@@ -26,13 +26,7 @@
       "es2018",
       "scripthost",
       "ESNext"
-    ],
-    "baseUrl": "src",
-    "paths": {
-      "@core": [
-        "core.ts"
-      ]
-    }
+    ]
   },
   "include": [
     "src/**/*"

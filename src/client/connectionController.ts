@@ -1,7 +1,7 @@
 import { Mutex } from '@broxus/await-semaphore';
 import type * as nt from 'nekoton-wasm';
 
-import core from '@core';
+import core from '../core';
 import { GqlSocket, GqlSocketParams } from './gql';
 
 const { debugLog } = core;
@@ -268,12 +268,12 @@ function requireInitializedTransport(transport?: InitializedTransport): asserts 
  * @category Client
  */
 export type ConnectionData = { group: string } & (
-  | nt.EnumItem<'graphql', GqlSocketParams>
+  | { type: 'graphql', data: GqlSocketParams }
   )
 
 /**
  * @category Client
  */
 export type InitializedTransport = { group: string } & (
-  | nt.EnumItem<'graphql', { socket: GqlSocket, transport: nt.GqlTransport }>
+  | { type: 'graphql', data: { socket: GqlSocket, transport: nt.GqlTransport } }
   )
