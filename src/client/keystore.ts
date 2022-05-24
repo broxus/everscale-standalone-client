@@ -54,20 +54,40 @@ export class SimpleKeystore implements Keystore {
     this.signers.delete(publicKey);
   }
 
-  public async withNewKey(f: (publicKey: string) => Promise<boolean | undefined>): Promise<string> {
+  /**
+   * Generate and add a new key
+   *
+   * @returns keyId of the new signer
+   */
+  public async withNewKey(
+    f: (publicKey: string) => Promise<boolean | undefined>,
+    options: {
+      /**
+       * Default: public key of the new key pair
+       */
+      keyId?: string,
+      /**
+       * Default: false
+       */
+      keepOnError?: boolean
+    } = {},
+  ): Promise<string> {
     const newKey = SimpleKeystore.generateKeyPair();
-    const publicKey = newKey.publicKey;
+    const keyId = options.keyId != null ? options.keyId : newKey.publicKey;
+    const keepOnError = options.keepOnError || false;
 
-    this.addKeyPair(publicKey, newKey);
-    return f(publicKey)
+    this.addKeyPair(keyId, newKey);
+    return f(keyId)
       .then(retain => {
         if (retain === false) {
-          this.removeKeyPair(publicKey);
+          this.removeKeyPair(keyId);
         }
-        return publicKey;
+        return keyId;
       })
       .catch((e: any) => {
-        this.removeKeyPair(publicKey);
+        if (!keepOnError) {
+          this.removeKeyPair(keyId);
+        }
         throw e;
       });
   }
