@@ -8,16 +8,21 @@ const { nekoton } = core;
  */
 export interface Keystore {
   /**
-   * Returns signer for given public key
-   * @param publicKey - hex or base64 encoded public key
+   * Returns signer for given id
+   * @param id: unique signer name
    */
-  getSigner(publicKey: string): Promise<Signer | undefined>;
+  getSigner(id: string): Promise<Signer | undefined>;
 }
 
 /**
  * @category Keystore
  */
 export interface Signer {
+  /**
+   * Hex encoded public key
+   */
+  readonly publicKey: string;
+
   /**
    * Sign data as is and return a signature
    * @param rawData - hex or base64 encoded data
@@ -31,9 +36,9 @@ export interface Signer {
 export class SimpleKeystore implements Keystore {
   private readonly signers: Map<string, Signer> = new Map();
 
-  constructor(keys: nt.Ed25519KeyPair[] = []) {
-    for (const key of keys) {
-      this.addKeyPair(key);
+  constructor(entries: { [id: string]: nt.Ed25519KeyPair } = {}) {
+    for (const [id, signer] of Object.entries(entries)) {
+      this.addKeyPair(id, signer);
     }
   }
 
@@ -41,12 +46,30 @@ export class SimpleKeystore implements Keystore {
     return nekoton.ed25519_generateKeyPair();
   }
 
-  public addKeyPair({ publicKey, secretKey }: nt.Ed25519KeyPair) {
-    this.signers.set(publicKey, new SimpleSigner(secretKey));
+  public addKeyPair(id: string, keyPair: nt.Ed25519KeyPair) {
+    this.signers.set(id, new SimpleSigner(keyPair));
   }
 
   public removeKeyPair(publicKey: string) {
     this.signers.delete(publicKey);
+  }
+
+  public async withNewKey(f: (publicKey: string) => Promise<boolean | undefined>): Promise<string> {
+    const newKey = SimpleKeystore.generateKeyPair();
+    const publicKey = newKey.publicKey;
+
+    this.addKeyPair(publicKey, newKey);
+    return f(publicKey)
+      .then(retain => {
+        if (retain === false) {
+          this.removeKeyPair(publicKey);
+        }
+        return publicKey;
+      })
+      .catch((e: any) => {
+        this.removeKeyPair(publicKey);
+        throw e;
+      });
   }
 
   public async getSigner(publicKey: string): Promise<Signer | undefined> {
@@ -55,10 +78,12 @@ export class SimpleKeystore implements Keystore {
 }
 
 class SimpleSigner implements Signer {
-  constructor(private readonly privateKey: string) {
+  constructor(private readonly keyPair: nt.Ed25519KeyPair) {
   }
 
+  readonly publicKey: string = this.keyPair.secretKey;
+
   async sign(rawData: string): Promise<string> {
-    return nekoton.ed25519_sign(this.privateKey, rawData);
+    return nekoton.ed25519_sign(this.keyPair.secretKey, rawData);
   }
 }
