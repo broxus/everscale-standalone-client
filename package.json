@@ -1,9 +1,7 @@
 {
   "name": "everscale-standalone-client",
-  "version": "1.0.4",
+  "version": "2.0.0",
   "repository": "https://github.com/broxus/everscale-standalone-client",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "scripts": {
     "build": "typedoc && tsc",
     "lint": "eslint"
@@ -24,8 +22,12 @@
   "dependencies": {
     "@broxus/await-semaphore": "^0.1.5",
     "events": "^3.3.0",
+    "everscale-inpage-provider": "^0.3.13",
     "fast-safe-stringify": "^2.1.1",
-    "nekoton-wasm": "^0.1.15",
-    "everscale-inpage-provider": "^0.3.10"
-  }
+    "nekoton-wasm": "^0.1.16",
+    "node-fetch": "^2.6.7"
+  },
+  "types": "dist/index.d.ts",
+  "main": "dist/index_main.js",
+  "browser": "dist/index.js"
 }

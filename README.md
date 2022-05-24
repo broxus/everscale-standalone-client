@@ -22,7 +22,11 @@ npm install --save everscale-inpage-provider everscale-standalone-client
 
 ```typescript
 import { Address, ProviderRpcClient, TvmException } from 'everscale-inpage-provider';
+
+// For browser environment:
 import { EverscaleStandaloneClient } from 'everscale-standalone-client';
+// Or for nodejs environment:
+// import { EverscaleStandaloneClient } from 'everscale-standalone-client/nodejs';
 
 const ever = new ProviderRpcClient({
   fallback: () =>

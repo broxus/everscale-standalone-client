@@ -1,9 +1,12 @@
 import { Mutex } from '@broxus/await-semaphore';
-import * as nt from 'nekoton-wasm';
+import type * as nt from 'nekoton-wasm';
+import core from './core';
 
 import { GqlSocket, GqlSocketParams } from './gql';
 
 export const DEFAULT_NETWORK_GROUP = 'mainnet';
+
+const { debugLog } = core;
 
 /**
  * @category Client
@@ -80,7 +83,7 @@ export async function createConnectionController(
     try {
       const controller = new ConnectionController(clock);
       await controller.startSwitchingNetwork(preset).then((handle) => handle.switch());
-      console.debug(`Successfully connected to ${preset.group}`);
+      debugLog(`Successfully connected to ${preset.group}`);
       return controller;
     } catch (e: any) {
       if (retry) {
@@ -88,7 +91,7 @@ export async function createConnectionController(
         await new Promise<void>((resolve) => {
           setTimeout(() => resolve(), 5000);
         });
-        console.log('Restarting connection process');
+        debugLog('Restarting connection process');
       } else {
         throw e;
       }
@@ -221,29 +224,29 @@ export class ConnectionController {
   }
 
   private async _acquireTransport() {
-    console.debug('_acquireTransport');
+    debugLog('_acquireTransport');
 
     if (this._acquiredTransportCounter > 0) {
-      console.debug('_acquireTransport -> increase');
+      debugLog('_acquireTransport -> increase');
       this._acquiredTransportCounter += 1;
     } else {
       this._acquiredTransportCounter = 1;
       if (this._release != null) {
         console.warn('mutex is already acquired');
       } else {
-        console.debug('_acquireTransport -> await');
+        debugLog('_acquireTransport -> await');
         this._release = await this._networkMutex.acquire();
-        console.debug('_acquireTransport -> create');
+        debugLog('_acquireTransport -> create');
       }
     }
   }
 
   private _releaseTransport() {
-    console.debug('_releaseTransport');
+    debugLog('_releaseTransport');
 
     this._acquiredTransportCounter -= 1;
     if (this._acquiredTransportCounter <= 0) {
-      console.debug('_releaseTransport -> release');
+      debugLog('_releaseTransport -> release');
       this._release?.();
       this._release = undefined;
     }

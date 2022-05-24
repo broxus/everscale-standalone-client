@@ -1,14 +1,5 @@
 import { EventEmitter } from 'events';
 
-const MAX = 4294967295;
-
-let idCounter = Math.floor(Math.random() * MAX);
-
-export function getUniqueId(): number {
-  idCounter = (idCounter + 1) % MAX;
-  return idCounter;
-}
-
 type Handler = (...args: any[]) => void
 
 interface EventMap {

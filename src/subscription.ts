@@ -1,7 +1,10 @@
 import { Mutex } from '@broxus/await-semaphore';
-import * as nt from 'nekoton-wasm';
+import type * as nt from 'nekoton-wasm';
+import core from './core';
 
 import { ConnectionController } from './connectionController';
+
+const { nekoton, debugLog } = core;
 
 export class ContractSubscription {
   private readonly _transport: Transport;
@@ -53,14 +56,14 @@ export class ContractSubscription {
     }
 
     if (this._loopPromise) {
-      console.debug('ContractSubscription -> awaiting loop promise');
+      debugLog('ContractSubscription -> awaiting loop promise');
       await this._loopPromise;
     }
 
-    console.debug('ContractSubscription -> loop started');
+    debugLog('ContractSubscription -> loop started');
 
     this._loopPromise = new Promise<void>(async (resolve) => {
-      const isSimpleTransport = !(this._transport instanceof nt.GqlTransport);
+      const isSimpleTransport = !(this._transport instanceof nekoton.GqlTransport);
 
       this._isRunning = true;
       let previousPollingMethod = this._currentPollingMethod;
@@ -71,7 +74,7 @@ export class ContractSubscription {
         if (isSimpleTransport || this._currentPollingMethod == 'manual') {
           this._currentBlockId = undefined;
 
-          console.debug('ContractSubscription -> manual -> waiting begins');
+          debugLog('ContractSubscription -> manual -> waiting begins');
 
           const pollingInterval =
             this._currentPollingMethod == 'manual'
@@ -86,13 +89,13 @@ export class ContractSubscription {
             this._refreshTimer = [timerHandle, resolve];
           });
 
-          console.debug('ContractSubscription -> manual -> waiting ends');
+          debugLog('ContractSubscription -> manual -> waiting ends');
 
           if (!this._isRunning) {
             break;
           }
 
-          console.debug('ContractSubscription -> manual -> refreshing begins');
+          debugLog('ContractSubscription -> manual -> refreshing begins');
 
           try {
             this._currentPollingMethod = await this._contractMutex.use(async () => {
@@ -103,12 +106,12 @@ export class ContractSubscription {
             console.error(`Error during account refresh (${this._address})`, e);
           }
 
-          console.debug('ContractSubscription -> manual -> refreshing ends');
+          debugLog('ContractSubscription -> manual -> refreshing ends');
         } else {
           // SAFETY: connection is always GqlConnection here due to `isSimpleTransport`
           const transport = this._transport as nt.GqlTransport;
 
-          console.debug('ContractSubscription -> reliable start');
+          debugLog('ContractSubscription -> reliable start');
 
           if (pollingMethodChanged && this._suggestedBlockId != null) {
             this._currentBlockId = this._suggestedBlockId;
@@ -152,7 +155,7 @@ export class ContractSubscription {
         }
       }
 
-      console.debug('ContractSubscription -> loop finished');
+      debugLog('ContractSubscription -> loop finished');
 
       resolve();
     });
@@ -193,7 +196,7 @@ export class ContractSubscription {
 
   public async prepareReliablePolling() {
     try {
-      if (this._transport instanceof nt.GqlTransport) {
+      if (this._transport instanceof nekoton.GqlTransport) {
         this._suggestedBlockId = (await this._transport.getLatestBlock(this._address)).id;
       }
     } catch (e: any) {

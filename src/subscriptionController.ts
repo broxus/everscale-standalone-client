@@ -1,5 +1,5 @@
 import { Mutex } from '@broxus/await-semaphore';
-import * as nt from 'nekoton-wasm';
+import type * as nt from 'nekoton-wasm';
 
 import ever from 'everscale-inpage-provider';
 
