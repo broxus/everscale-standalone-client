@@ -1,21 +1,22 @@
-import type * as nt from 'nekoton-wasm';
-import core from './core';
-
 import safeStringify from 'fast-safe-stringify';
-
 import type ever from 'everscale-inpage-provider';
+import type * as nt from 'nekoton-wasm';
 
+import core from '../core';
 import { convertVersionToInt32, SafeEventEmitter } from './utils';
 import {
-  createConnectionController,
   DEFAULT_NETWORK_GROUP,
+  createConnectionController,
   ConnectionProperties,
   ConnectionController,
 } from './connectionController';
 import { SubscriptionController } from './subscriptionController';
+import { Keystore } from './keystore';
 
+export { NETWORK_PRESETS, ConnectionData, ConnectionProperties } from './connectionController';
 export { GqlSocketParams } from './gql';
-export { ConnectionData, ConnectionProperties, NETWORK_PRESETS } from './connectionController';
+export { Keystore, Signer, SimpleKeystore } from './keystore';
+export type { Ed25519KeyPair } from 'nekoton-wasm';
 
 const { ensureNekotonLoaded, nekoton } = core;
 
@@ -26,6 +27,7 @@ const { ensureNekotonLoaded, nekoton } = core;
  */
 export type ClientProperties = {
   connection: ConnectionProperties
+  keystore?: Keystore,
 };
 
 /**
@@ -51,6 +53,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
   private _context: Context;
   private _handlers: { [K in ever.ProviderMethod]?: ProviderHandler<K> } = {
     requestPermissions,
+    // changeAccount, // not supported
     disconnect,
     subscribe,
     unsubscribe,
@@ -70,11 +73,20 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     splitTvc,
     encodeInternalInput,
     decodeInput,
-    decodeEvent,
     decodeOutput,
+    decodeEvent,
     decodeTransaction,
     decodeTransactionEvents,
     verifySignature,
+    sendUnsignedExternalMessage,
+    // addAsset, // not supported
+    signData, // not supported
+    signDataRaw, // not supported
+    // encryptData, // not supported
+    // decryptData, // not supported
+    // estimateFees, // not supported
+    // sendMessage, // not supported
+    sendExternalMessage, // not supported
   };
 
   public static async create(params: ClientProperties): Promise<EverscaleStandaloneClient> {
@@ -97,6 +109,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
       permissions: {},
       connectionController,
       subscriptionController,
+      keystore: params.keystore,
       notify,
     });
     notificationContext.client = new WeakRef(client);
@@ -122,6 +135,7 @@ type Context = {
   permissions: Partial<ever.RawPermissions>,
   connectionController: ConnectionController,
   subscriptionController: SubscriptionController,
+  keystore?: Keystore,
   notify: <T extends ever.ProviderEvent>(method: T, params: ever.RawProviderEventData<T>) => void
 }
 
@@ -449,21 +463,6 @@ const decodeInput: ProviderHandler<'decodeInput'> = async (_ctx, req) => {
   }
 };
 
-const decodeEvent: ProviderHandler<'decodeEvent'> = async (_ctx, req) => {
-  requireParams(req);
-
-  const { body, abi, event } = req.params;
-  requireString(req, req.params, 'body');
-  requireString(req, req.params, 'abi');
-  requireMethodOrArray(req, req.params, 'event');
-
-  try {
-    return nekoton.decodeEvent(body, abi, event) || null;
-  } catch (e: any) {
-    throw invalidRequest(req, e.toString());
-  }
-};
-
 const decodeOutput: ProviderHandler<'decodeOutput'> = async (_ctx, req) => {
   requireParams(req);
 
@@ -474,6 +473,21 @@ const decodeOutput: ProviderHandler<'decodeOutput'> = async (_ctx, req) => {
 
   try {
     return nekoton.decodeOutput(body, abi, method) || null;
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
+const decodeEvent: ProviderHandler<'decodeEvent'> = async (_ctx, req) => {
+  requireParams(req);
+
+  const { body, abi, event } = req.params;
+  requireString(req, req.params, 'body');
+  requireString(req, req.params, 'abi');
+  requireMethodOrArray(req, req.params, 'event');
+
+  try {
+    return nekoton.decodeEvent(body, abi, event) || null;
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -521,6 +535,170 @@ const verifySignature: ProviderHandler<'verifySignature'> = async (_ctx, req) =>
   }
 };
 
+const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'> = async (ctx, req) => {
+  requireParams(req);
+
+  const { recipient, stateInit, payload, local } = req.params;
+  requireString(req, req.params, 'recipient');
+  requireOptionalString(req, req.params, 'stateInit');
+  requireFunctionCall(req, req.params, 'payload');
+  requireOptionalBoolean(req, req.params, 'local');
+
+  if (!nekoton.checkAddress(recipient)) {
+    throw invalidRequest(req, 'Invalid recipient');
+  }
+
+  const { clock, subscriptionController } = ctx;
+
+  let signedMessage: nt.SignedMessage;
+  try {
+    signedMessage = nekoton.createExternalMessageWithoutSignature(
+      clock,
+      recipient,
+      payload.abi,
+      payload.method,
+      stateInit,
+      payload.params,
+      60,
+    );
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+
+  let transaction: nt.Transaction;
+  if (local === true) {
+    transaction = await subscriptionController.sendMessageLocally(recipient, signedMessage);
+  } else {
+    transaction = await subscriptionController.sendMessage(recipient, signedMessage);
+  }
+
+  let output: ever.RawTokensObject | undefined;
+  try {
+    const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
+    output = decoded?.output;
+  } catch (_) {
+  }
+
+  return { transaction, output };
+};
+
+
+const signData: ProviderHandler<'signData'> = async (ctx, req) => {
+  requireKeystore(req, ctx);
+  requireParams(req);
+
+  const { publicKey, data } = req.params;
+  requireString(req, req.params, 'publicKey');
+  requireString(req, req.params, 'data');
+
+  const { keystore } = ctx;
+  const signer = await keystore.getSigner(publicKey);
+  if (signer == null) {
+    throw invalidRequest(req, 'Signer not found for public key');
+  }
+
+  try {
+    const dataHash = nekoton.getDataHash(data);
+    return {
+      dataHash,
+      ...(await signer.sign(dataHash).then(nekoton.extendSignature)),
+    };
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
+const signDataRaw: ProviderHandler<'signDataRaw'> = async (ctx, req) => {
+  requireKeystore(req, ctx);
+  requireParams(req);
+
+  const { publicKey, data } = req.params;
+  requireString(req, req.params, 'publicKey');
+  requireString(req, req.params, 'data');
+
+  const { keystore } = ctx;
+  const signer = await keystore.getSigner(publicKey);
+  if (signer == null) {
+    throw invalidRequest(req, 'Signer not found for public key');
+  }
+
+  try {
+    return await signer.sign(data).then(nekoton.extendSignature);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
+const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, req) => {
+  requireKeystore(req, ctx);
+  requireParams(req);
+
+  const { publicKey, recipient, stateInit, payload, local } = req.params;
+  requireString(req, req.params, 'publicKey');
+  requireString(req, req.params, 'recipient');
+  requireOptionalString(req, req.params, 'stateInit');
+  requireFunctionCall(req, req.params, 'payload');
+  requireOptionalBoolean(req, req.params, 'local');
+
+  if (!nekoton.checkAddress(recipient)) {
+    throw invalidRequest(req, 'Invalid recipient');
+  }
+
+  const { clock, subscriptionController, keystore } = ctx;
+  const signer = await keystore.getSigner(publicKey);
+  if (signer == null) {
+    throw invalidRequest(req, 'Signer not found for public key');
+  }
+
+  let unsignedMessage: nt.UnsignedMessage;
+  try {
+    unsignedMessage = nekoton.createExternalMessage(
+      clock,
+      recipient,
+      payload.abi,
+      payload.method,
+      stateInit,
+      payload.params,
+      publicKey,
+      60,
+    );
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+
+  let signedMessage: nt.SignedMessage;
+  try {
+    const signature = await signer.sign(unsignedMessage.hash);
+    signedMessage = unsignedMessage.sign(signature);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  } finally {
+    unsignedMessage.free();
+  }
+
+  let transaction: nt.Transaction;
+  if (local === true) {
+    transaction = await subscriptionController.sendMessageLocally(recipient, signedMessage);
+  } else {
+    transaction = await subscriptionController.sendMessage(recipient, signedMessage);
+  }
+
+  let output: ever.RawTokensObject | undefined;
+  try {
+    const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
+    output = decoded?.output;
+  } catch (_) {
+  }
+
+  return { transaction, output };
+};
+
+
+function requireKeystore(req: any, context: Context): asserts context is Context & { keystore: Keystore } {
+  if (context.keystore == null) {
+    throw invalidRequest(req, 'Keystore not found');
+  }
+}
 
 function requireParams<T extends ever.ProviderMethod>(req: any): asserts req is ever.RawProviderRequest<T> {
   if (req.params == null || typeof req.params !== 'object') {
