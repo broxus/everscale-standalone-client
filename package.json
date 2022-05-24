@@ -4,7 +4,7 @@
   "repository": "https://github.com/broxus/everscale-standalone-client",
   "scripts": {
     "build": "typedoc && tsc",
-    "publish": "cp package.json dist && cp README.md dist/ && cp LICENSE dist/ && cd dist/ && npm publish",
+    "publish": "cp package.json dist/package.json && cp README.md dist/README.md && cp LICENSE dist/LICENSE && cd dist && npm publish",
     "lint": "eslint"
   },
   "author": "",
