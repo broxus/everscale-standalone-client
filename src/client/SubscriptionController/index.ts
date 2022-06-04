@@ -2,7 +2,7 @@ import { Mutex } from '@broxus/await-semaphore';
 import type ever from 'everscale-inpage-provider';
 import type * as nt from 'nekoton-wasm';
 
-import { ConnectionController } from './connectionController';
+import { ConnectionController } from '../ConnectionController';
 import { ContractSubscription, IContractHandler } from './subscription';
 
 const DEFAULT_POLLING_INTERVAL = 10000; // 10s

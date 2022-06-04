@@ -1,6 +1,6 @@
 import type * as nt from 'nekoton-wasm';
 
-import core from '../core';
+import core from '../../core';
 
 const { nekoton, fetch } = core;
 
@@ -8,13 +8,21 @@ const { nekoton, fetch } = core;
  * @category Client
  */
 export type GqlSocketParams = {
-  // Path to graphql api endpoints, e.g. `https://main.ton.dev`
+  /**
+   * Path to graphql api endpoints, e.g. `https://main.ton.dev`
+   */
   endpoints: string[]
-  // Frequency of sync latency detection
+  /**
+   * Frequency of sync latency detection
+   */
   latencyDetectionInterval: number
-  // Maximum value for the endpoint's blockchain data sync latency
+  /**
+   * Maximum value for the endpoint's blockchain data sync latency
+   */
   maxLatency: number
-  // Gql node type
+  /**
+   * Gql node type
+   */
   local: boolean
 }
 
@@ -22,7 +30,7 @@ export class GqlSocket {
   public async connect(
     clock: nt.ClockWithOffset,
     params: GqlSocketParams,
-  ): Promise<nt.GqlTransport> {
+  ): Promise<nt.GqlConnection> {
     class GqlSender implements nt.IGqlSender {
       private readonly params: GqlSocketParams;
       private readonly endpoints: string[];
@@ -142,7 +150,7 @@ export class GqlSocket {
       }
     }
 
-    return new nekoton.GqlTransport(clock, new GqlSender(params));
+    return new nekoton.GqlConnection(clock, new GqlSender(params));
   }
 
   static async checkLatency(endpoint: string): Promise<number | undefined> {

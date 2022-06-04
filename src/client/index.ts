@@ -9,12 +9,14 @@ import {
   createConnectionController,
   ConnectionProperties,
   ConnectionController,
-} from './connectionController';
-import { SubscriptionController } from './subscriptionController';
+  GqlSocketParams,
+  JrpcSocketParams,
+} from './ConnectionController';
+import { SubscriptionController } from './SubscriptionController';
 import { Keystore } from './keystore';
 
-export { NETWORK_PRESETS, ConnectionData, ConnectionProperties } from './connectionController';
-export { GqlSocketParams } from './gql';
+export { NETWORK_PRESETS, ConnectionData, ConnectionProperties } from './ConnectionController';
+export { GqlSocketParams, JrpcSocketParams } from './ConnectionController';
 export { Keystore, Signer, SimpleKeystore } from './keystore';
 export type { Ed25519KeyPair } from 'nekoton-wasm';
 
@@ -93,10 +95,10 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     await ensureNekotonLoaded();
 
     // NOTE: capture client inside notify using wrapper object
-    let notificationContext: { client?: WeakRef<EverscaleStandaloneClient> } = {};
+    let notificationContext: { client?: EverscaleStandaloneClient } = {};
 
     const notify = <T extends ever.ProviderEvent>(method: T, params: ever.RawProviderEventData<T>) => {
-      notificationContext.client?.deref()?.emit(method, params);
+      notificationContext.client?.emit(method, params);
     };
 
     const clock = new core.nekoton.ClockWithOffset();
@@ -112,7 +114,8 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
       keystore: params.keystore,
       notify,
     });
-    notificationContext.client = new WeakRef(client);
+    // NOTE: WeakRef is not working here, so hope it will be garbage collected
+    notificationContext.client = client;
     return client;
   }
 

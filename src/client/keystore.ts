@@ -35,6 +35,7 @@ export interface Signer {
  */
 export class SimpleKeystore implements Keystore {
   private readonly signers: Map<string, Signer> = new Map();
+  private readonly signersByPublicKey: Map<string, Signer> = new Map();
 
   constructor(entries: { [id: string]: nt.Ed25519KeyPair } = {}) {
     for (const [id, signer] of Object.entries(entries)) {
@@ -47,11 +48,17 @@ export class SimpleKeystore implements Keystore {
   }
 
   public addKeyPair(id: string, keyPair: nt.Ed25519KeyPair) {
-    this.signers.set(id, new SimpleSigner(keyPair));
+    const signer = new SimpleSigner(keyPair);
+    this.signers.set(id, signer);
+    this.signersByPublicKey.set(keyPair.publicKey, signer);
   }
 
-  public removeKeyPair(publicKey: string) {
-    this.signers.delete(publicKey);
+  public removeKeyPair(id: string) {
+    const signer = this.signers.get(id)
+    if (signer != null) {
+      this.signers.delete(id)
+      this.signersByPublicKey.delete(signer.publicKey)
+    }
   }
 
   /**
@@ -92,8 +99,8 @@ export class SimpleKeystore implements Keystore {
       });
   }
 
-  public async getSigner(publicKey: string): Promise<Signer | undefined> {
-    return this.signers.get(publicKey);
+  public async getSigner(id: string): Promise<Signer | undefined> {
+    return this.signers.get(id) || this.signersByPublicKey.get(id);
   }
 }
 

@@ -1,13 +1,13 @@
 import { Mutex } from '@broxus/await-semaphore';
 import type * as nt from 'nekoton-wasm';
 
-import core from '../core';
-import { ConnectionController } from './connectionController';
+import core from '../../core';
+import { ConnectionController } from '../ConnectionController';
 
 const { nekoton, debugLog } = core;
 
 export class ContractSubscription {
-  private readonly _transport: Transport;
+  private readonly _connection: Connection;
   private readonly _address: string;
   private readonly _contract: nt.GenericContract;
   private readonly _contractMutex: Mutex = new Mutex();
@@ -22,7 +22,7 @@ export class ContractSubscription {
 
   public static async subscribe(connectionController: ConnectionController, address: string, handler: IContractHandler<nt.Transaction>) {
     const {
-      transport: { data: { transport } },
+      transport: { data: { connection, transport } },
       release,
     } = await connectionController.acquire();
 
@@ -31,15 +31,15 @@ export class ContractSubscription {
       if (contract == null) {
         throw new Error(`Failed to subscribe to contract: ${address}`);
       }
-      return new ContractSubscription(transport, release, address, contract);
+      return new ContractSubscription(connection, release, address, contract);
     } catch (e: any) {
       release();
       throw e;
     }
   }
 
-  private constructor(transport: Transport, release: () => void, address: string, contract: nt.GenericContract) {
-    this._transport = transport;
+  private constructor(connection: Connection, release: () => void, address: string, contract: nt.GenericContract) {
+    this._connection = connection;
     this._address = address;
     this._contract = contract;
     this._releaseTransport = release;
@@ -63,7 +63,7 @@ export class ContractSubscription {
     debugLog('ContractSubscription -> loop started');
 
     this._loopPromise = new Promise<void>(async (resolve) => {
-      const isSimpleTransport = !(this._transport instanceof nekoton.GqlTransport);
+      const isSimple = !(this._connection instanceof nekoton.GqlConnection);
 
       this._isRunning = true;
       let previousPollingMethod = this._currentPollingMethod;
@@ -71,7 +71,7 @@ export class ContractSubscription {
         const pollingMethodChanged = previousPollingMethod != this._currentPollingMethod;
         previousPollingMethod = this._currentPollingMethod;
 
-        if (isSimpleTransport || this._currentPollingMethod == 'manual') {
+        if (isSimple || this._currentPollingMethod == 'manual') {
           this._currentBlockId = undefined;
 
           debugLog('ContractSubscription -> manual -> waiting begins');
@@ -108,8 +108,8 @@ export class ContractSubscription {
 
           debugLog('ContractSubscription -> manual -> refreshing ends');
         } else {
-          // SAFETY: connection is always GqlConnection here due to `isSimpleTransport`
-          const transport = this._transport as nt.GqlTransport;
+          // SAFETY: connection is always GqlConnection here due to `isSimple`
+          const connection = this._connection as nt.GqlConnection;
 
           debugLog('ContractSubscription -> reliable start');
 
@@ -123,7 +123,7 @@ export class ContractSubscription {
             console.warn('Starting reliable connection with unknown block');
 
             try {
-              const latestBlock = await transport.getLatestBlock(this._address);
+              const latestBlock = await connection.getLatestBlock(this._address);
               this._currentBlockId = latestBlock.id;
               nextBlockId = this._currentBlockId;
             } catch (e: any) {
@@ -132,7 +132,7 @@ export class ContractSubscription {
             }
           } else {
             try {
-              nextBlockId = await transport.waitForNextBlock(
+              nextBlockId = await connection.waitForNextBlock(
                 this._currentBlockId,
                 this._address,
                 NEXT_BLOCK_TIMEOUT,
@@ -196,8 +196,8 @@ export class ContractSubscription {
 
   public async prepareReliablePolling() {
     try {
-      if (this._transport instanceof nekoton.GqlTransport) {
-        this._suggestedBlockId = (await this._transport.getLatestBlock(this._address)).id;
+      if (this._connection instanceof nekoton.GqlConnection) {
+        this._suggestedBlockId = (await this._connection.getLatestBlock(this._address)).id;
       }
     } catch (e: any) {
       throw new Error(`Failed to prepare reliable polling: ${e.toString()}`);
@@ -228,7 +228,7 @@ export interface IContractHandler<T extends nt.Transaction> {
   onTransactionsFound(transactions: Array<T>, info: nt.TransactionsBatchInfo): void;
 }
 
-type Transport = nt.GqlTransport;
+type Connection = nt.GqlConnection | nt.JrpcConnection;
 
 const NEXT_BLOCK_TIMEOUT = 60; // 60s
 const INTENSIVE_POLLING_INTERVAL = 2000; // 2s

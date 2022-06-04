@@ -1,10 +1,14 @@
 import { Mutex } from '@broxus/await-semaphore';
 import type * as nt from 'nekoton-wasm';
 
-import core from '../core';
+import core from '../../core';
 import { GqlSocket, GqlSocketParams } from './gql';
+import { JrpcSocket, JrpcSocketParams } from './jrpc';
 
-const { debugLog } = core;
+export { GqlSocketParams } from './gql';
+export { JrpcSocketParams } from './jrpc';
+
+const { nekoton, debugLog } = core;
 
 export const DEFAULT_NETWORK_GROUP = 'mainnet';
 
@@ -25,6 +29,13 @@ export const NETWORK_PRESETS = {
       ],
       latencyDetectionInterval: 60000,
       local: false,
+    },
+  } as ConnectionData,
+  mainnetJrpc: {
+    group: 'mainnet',
+    type: 'jrpc',
+    data: {
+      endpoint: 'https://jrpc.everwallet.net/rpc',
     },
   } as ConnectionData,
   testnet: {
@@ -167,6 +178,7 @@ export class ConnectionController {
   private async _connect(params: ConnectionData) {
     if (this._initializedTransport) {
       this._initializedTransport.data.transport.free();
+      this._initializedTransport.data.connection.free();
     }
     this._initializedTransport = undefined;
 
@@ -193,24 +205,47 @@ export class ConnectionController {
 
     try {
       // TODO: add jrpc transport
-      const { shouldTest, transportData } = await (async () => {
-        const socket = new GqlSocket();
-        const transport = await socket.connect(this._clock, params.data);
+      const { shouldTest, transportData } = await (params.type === 'graphql'
+        ? async () => {
+          const socket = new GqlSocket();
+          const connection = await socket.connect(this._clock, params.data);
+          const transport = nekoton.Transport.fromGqlConnection(connection);
 
-        const transportData: InitializedTransport = {
-          group: params.group,
-          type: 'graphql',
-          data: {
-            socket,
-            transport,
-          },
-        };
+          const transportData: InitializedTransport = {
+            group: params.group,
+            type: 'graphql',
+            data: {
+              socket,
+              connection,
+              transport,
+            },
+          };
 
-        return {
-          shouldTest: !params.data.local,
-          transportData,
-        };
-      })();
+          return {
+            shouldTest: !params.data.local,
+            transportData,
+          };
+        }
+        : async () => {
+          const socket = new JrpcSocket();
+          const connection = await socket.connect(this._clock, params.data);
+          const transport = nekoton.Transport.fromJrpcConnection(connection);
+
+          const transportData: InitializedTransport = {
+            group: params.group,
+            type: 'jrpc',
+            data: {
+              socket,
+              connection,
+              transport,
+            },
+          };
+
+          return {
+            shouldTest: true,
+            transportData,
+          };
+        })();
 
       if (shouldTest && (await testTransport(transportData)) == TestConnectionResult.CANCELLED) {
         transportData.data.transport.free();
@@ -269,11 +304,13 @@ function requireInitializedTransport(transport?: InitializedTransport): asserts 
  */
 export type ConnectionData = { group: string } & (
   | { type: 'graphql', data: GqlSocketParams }
+  | { type: 'jrpc', data: JrpcSocketParams }
   )
 
 /**
  * @category Client
  */
 export type InitializedTransport = { group: string } & (
-  | { type: 'graphql', data: { socket: GqlSocket, transport: nt.GqlTransport } }
+  | { type: 'graphql', data: { socket: GqlSocket, connection: nt.GqlConnection, transport: nt.Transport } }
+  | { type: 'jrpc', data: { socket: JrpcSocket, connection: nt.JrpcConnection, transport: nt.Transport } }
   )
