@@ -30,6 +30,7 @@ const { ensureNekotonLoaded, nekoton } = core;
 export type ClientProperties = {
   connection: ConnectionProperties
   keystore?: Keystore,
+  initInput?: nt.InitInput | Promise<nt.InitInput>,
 };
 
 /**
@@ -92,7 +93,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
   };
 
   public static async create(params: ClientProperties): Promise<EverscaleStandaloneClient> {
-    await ensureNekotonLoaded();
+    await ensureNekotonLoaded(params.initInput);
 
     // NOTE: capture client inside notify using wrapper object
     let notificationContext: { client?: EverscaleStandaloneClient } = {};

@@ -7,10 +7,10 @@ let initializationPromise: Promise<void> = new Promise<void>((resolve, reject) =
   notifyClientInitialized = { resolve, reject };
 });
 
-core.ensureNekotonLoaded = (): Promise<void> => {
+core.ensureNekotonLoaded = (initInput?: nt.InitInput | Promise<nt.InitInput>): Promise<void> => {
   if (!clientInitializationStarted) {
     clientInitializationStarted = true;
-    init().then(notifyClientInitialized.resolve).catch(notifyClientInitialized.reject);
+    init(initInput).then(notifyClientInitialized.resolve).catch(notifyClientInitialized.reject);
   }
   return initializationPromise;
 };

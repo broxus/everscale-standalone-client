@@ -6,7 +6,7 @@ const core = {
   fetch: undefined as unknown,
   debugLog: undefined as unknown,
 } as {
-  ensureNekotonLoaded: () => Promise<void>,
+  ensureNekotonLoaded: (initInput?: nt.InitInput | Promise<nt.InitInput>) => Promise<void>,
   nekoton: typeof nt,
   fetch: typeof fetch,
   debugLog: (...data: any[]) => void,
