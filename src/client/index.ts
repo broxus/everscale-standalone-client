@@ -73,7 +73,9 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     unpackFromCell,
     extractPublicKey,
     codeToTvc,
+    mergeTvc,
     splitTvc,
+    setCodeSalt,
     encodeInternalInput,
     decodeInput,
     decodeOutput,
@@ -352,7 +354,7 @@ const getExpectedAddress: ProviderHandler<'getExpectedAddress'> = async (_ctx, r
   requireOptionalString(req, req.params, 'publicKey');
 
   try {
-    return { address: nekoton.getExpectedAddress(tvc, abi, workchain || 0, publicKey, initParams) };
+    return nekoton.getExpectedAddress(tvc, abi, workchain || 0, publicKey, initParams);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -425,6 +427,20 @@ const codeToTvc: ProviderHandler<'codeToTvc'> = async (_ctx, req) => {
   }
 };
 
+const mergeTvc: ProviderHandler<'mergeTvc'> = async (_ctx, req) => {
+  requireParams(req);
+
+  const { code, data } = req.params;
+  requireString(req, req.params, 'code');
+  requireString(req, req.params, 'data');
+
+  try {
+    return { tvc: nekoton.mergeTvc(code, data) };
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
 const splitTvc: ProviderHandler<'splitTvc'> = async (_ctx, req) => {
   requireParams(req);
 
@@ -433,6 +449,20 @@ const splitTvc: ProviderHandler<'splitTvc'> = async (_ctx, req) => {
 
   try {
     return nekoton.splitTvc(tvc);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
+const setCodeSalt: ProviderHandler<'setCodeSalt'> = async (_ctx, req) => {
+  requireParams(req);
+
+  const { code, salt } = req.params;
+  requireString(req, req.params, 'code');
+  requireString(req, req.params, 'salt');
+
+  try {
+    return { code: nekoton.setCodeSalt(code, salt) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
