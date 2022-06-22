@@ -61,7 +61,7 @@ export class SubscriptionController {
           await contract.sendMessage(signedMessage);
           subscription.skipRefreshTimer();
         })
-        .catch((e) => {
+        .catch((e: any) => {
           this._rejectMessageRequest(address, id, e);
         });
     });

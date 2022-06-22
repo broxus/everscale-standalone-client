@@ -197,7 +197,7 @@ export class ConnectionController {
             '-1:0000000000000000000000000000000000000000000000000000000000000000',
           )
           .then(() => resolve(TestConnectionResult.DONE))
-          .catch((e) => reject(e));
+          .catch((e: any) => reject(e));
 
         setTimeout(() => reject(new Error('Connection timeout')), 10000);
       }).finally(() => this._cancelTestTransport = undefined);

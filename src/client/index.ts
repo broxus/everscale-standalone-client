@@ -743,56 +743,56 @@ function requireParams<T extends ever.ProviderMethod>(req: any): asserts req is 
 function requireObject<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (typeof property !== 'object') {
-    throw invalidRequest(req, `'${key}' must be an object`);
+    throw invalidRequest(req, `'${String(key)}' must be an object`);
   }
 }
 
 function requireOptionalObject<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (property != null && typeof property !== 'object') {
-    throw invalidRequest(req, `'${key}' must be an object if specified`);
+    throw invalidRequest(req, `'${String(key)}' must be an object if specified`);
   }
 }
 
 function requireBoolean<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (typeof property !== 'boolean') {
-    throw invalidRequest(req, `'${key}' must be a boolean`);
+    throw invalidRequest(req, `'${String(key)}' must be a boolean`);
   }
 }
 
 function requireOptionalBoolean<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (property != null && typeof property !== 'boolean') {
-    throw invalidRequest(req, `'${key}' must be a boolean if specified`);
+    throw invalidRequest(req, `'${String(key)}' must be a boolean if specified`);
   }
 }
 
 function requireString<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (typeof property !== 'string' || property.length === 0) {
-    throw invalidRequest(req, `'${key}' must be non-empty string`);
+    throw invalidRequest(req, `'${String(key)}' must be non-empty string`);
   }
 }
 
 function requireOptionalString<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (property != null && (typeof property !== 'string' || property.length === 0)) {
-    throw invalidRequest(req, `'${key}' must be a non-empty string if provided`);
+    throw invalidRequest(req, `'${String(key)}' must be a non-empty string if provided`);
   }
 }
 
 function requireOptionalNumber<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (property != null && typeof property !== 'number') {
-    throw invalidRequest(req, `'${key}' must be a number if provider`);
+    throw invalidRequest(req, `'${String(key)}' must be a number if provider`);
   }
 }
 
 function requireArray<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (!Array.isArray(property)) {
-    throw invalidRequest(req, `'${key}' must be an array`);
+    throw invalidRequest(req, `'${String(key)}' must be an array`);
   }
 }
 
@@ -846,7 +846,7 @@ function requireFunctionCall<O, P extends keyof O>(req: ever.RawProviderRequest<
 function requireMethodOrArray<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
   if (typeof property !== 'string' && !Array.isArray(property)) {
-    throw invalidRequest(req, `'${key}' must be a method name or an array of possible names`);
+    throw invalidRequest(req, `'${String(key)}' must be a method name or an array of possible names`);
   }
 }
 
