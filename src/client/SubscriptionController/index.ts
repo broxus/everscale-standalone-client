@@ -100,13 +100,13 @@ export class SubscriptionController {
 
       let existingSubscription = this._subscriptions.get(address);
       const isNewSubscription = existingSubscription == null;
-      if (isNewSubscription) {
+      if (existingSubscription == null) {
         existingSubscription = await this._createSubscription(address);
       }
 
       this._subscriptionStates.set(address, currentParams);
 
-      if (existingSubscription) {
+      if (isNewSubscription) {
         await existingSubscription.start();
       }
       return { ...currentParams };
