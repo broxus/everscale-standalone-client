@@ -108,7 +108,7 @@ class SimpleSigner implements Signer {
   constructor(private readonly keyPair: nt.Ed25519KeyPair) {
   }
 
-  readonly publicKey: string = this.keyPair.secretKey;
+  readonly publicKey: string = this.keyPair.publicKey;
 
   async sign(rawData: string): Promise<string> {
     return nekoton.ed25519_sign(this.keyPair.secretKey, rawData);
