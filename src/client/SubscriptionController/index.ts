@@ -1,5 +1,5 @@
 import { Mutex } from '@broxus/await-semaphore';
-import type ever from 'everscale-inpage-provider';
+import type * as ever from 'everscale-inpage-provider';
 import type * as nt from 'nekoton-wasm';
 
 import { ConnectionController } from '../ConnectionController';
