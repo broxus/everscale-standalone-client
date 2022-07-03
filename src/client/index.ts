@@ -281,7 +281,7 @@ const getTransactions: ProviderHandler<'getTransactions'> = async (ctx, req) => 
 
   try {
     return connectionController.use(({ data: { transport } }) =>
-      transport.getTransactions(address, continuation, limit || 50));
+      transport.getTransactions(address, continuation?.lt, limit || 50));
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
