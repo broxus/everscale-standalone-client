@@ -84,3 +84,20 @@ const DePoolAbi = {
 
 myApp().catch(console.error);
 ```
+### Build with Vite
+Using [Vite](https://vitejs.dev) you will stuck with [issue](https://github.com/vitejs/vite/issues/8427). As workaround you may initialize provider like in the example below.
+
+```js
+import { Address, ProviderRpcClient } from 'everscale-inpage-provider';
+import { EverscaleStandaloneClient } from 'everscale-standalone-client';
+
+const client = new ProviderRpcClient({
+  forceUseFallback: true,
+  fallback: () =>
+    EverscaleStandaloneClient.create({
+      connection: 'mainnet',
+      initInput: '../../node_modules/nekoton-wasm/nekoton_wasm_bg.wasm',
+    }),
+});
+
+```
