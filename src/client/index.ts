@@ -76,6 +76,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     mergeTvc,
     splitTvc,
     setCodeSalt,
+    getCodeSalt,
     encodeInternalInput,
     decodeInput,
     decodeOutput,
@@ -85,13 +86,13 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     verifySignature,
     sendUnsignedExternalMessage,
     // addAsset, // not supported
-    signData, // not supported
-    signDataRaw, // not supported
+    signData,
+    signDataRaw,
     // encryptData, // not supported
     // decryptData, // not supported
     // estimateFees, // not supported
     // sendMessage, // not supported
-    sendExternalMessage, // not supported
+    sendExternalMessage,
   };
 
   public static async create(params: ClientProperties): Promise<EverscaleStandaloneClient> {
@@ -463,6 +464,19 @@ const setCodeSalt: ProviderHandler<'setCodeSalt'> = async (_ctx, req) => {
 
   try {
     return { code: nekoton.setCodeSalt(code, salt) };
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
+const getCodeSalt: ProviderHandler<'getCodeSalt'> = async (_ctx, req) => {
+  requireParams(req);
+
+  const { code } = req.params;
+  requireString(req, req.params, 'code');
+
+  try {
+    return { salt: nekoton.getCodeSalt(code) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
