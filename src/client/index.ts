@@ -122,23 +122,32 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
 
     const clock = new core.nekoton.ClockWithOffset();
     if (params.clock != null) {
-      params.clock['impl'] = clock;
+      params.clock['impls'].push(clock);
     }
 
-    const connectionController = await createConnectionController(clock, params.connection);
-    const subscriptionController = new SubscriptionController(connectionController, notify);
+    try {
+      const connectionController = await createConnectionController(clock, params.connection);
+      const subscriptionController = new SubscriptionController(connectionController, notify);
 
-    const client = new EverscaleStandaloneClient({
-      permissions: {},
-      connectionController,
-      subscriptionController,
-      keystore: params.keystore,
-      clock,
-      notify,
-    });
-    // NOTE: WeakRef is not working here, so hope it will be garbage collected
-    notificationContext.client = client;
-    return client;
+      const client = new EverscaleStandaloneClient({
+        permissions: {},
+        connectionController,
+        subscriptionController,
+        keystore: params.keystore,
+        clock,
+        notify,
+      });
+      // NOTE: WeakRef is not working here, so hope it will be garbage collected
+      notificationContext.client = client;
+      return client;
+    } catch (e) {
+      if (params.clock != null) {
+        params.clock['impls'].pop();
+      }
+
+      clock.free();
+      throw e;
+    }
   }
 
   private constructor(ctx: Context) {

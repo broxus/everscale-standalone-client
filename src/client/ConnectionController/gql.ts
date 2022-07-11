@@ -2,7 +2,7 @@ import type * as nt from 'nekoton-wasm';
 
 import core from '../../core';
 
-const { nekoton, fetch } = core;
+const { nekoton, fetch, debugLog } = core;
 
 /**
  * @category Client
@@ -159,7 +159,7 @@ export class GqlSocket {
     })
       .then((response) => response.json())
       .catch((e: any) => {
-        console.error(e);
+        debugLog(e);
         return undefined;
       }) as any;
 

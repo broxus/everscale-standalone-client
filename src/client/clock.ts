@@ -1,10 +1,12 @@
 import type * as nt from 'nekoton-wasm';
 
 /**
+ * Wrapper around clocks which are used in `EverscaleStandaloneClient` instances
+ *
  * @category Client
  */
 export class Clock {
-  private impl?: nt.ClockWithOffset;
+  private impls: nt.ClockWithOffset[] = [];
 
   private currentOffset: number = 0;
 
@@ -26,8 +28,8 @@ export class Clock {
    */
   public set offset(value: number) {
     this.currentOffset = value;
-    if (this.impl != null) {
-      this.impl.updateOffset(this.currentOffset);
+    for (const impl of this.impls) {
+      impl.updateOffset(this.currentOffset);
     }
   }
 
@@ -36,5 +38,14 @@ export class Clock {
    */
   public get time(): number {
     return new Date().getTime() + this.offset;
+  }
+
+  /**
+   * Detaches all affected providers
+   *
+   * NOTE: affected providers offset remains the same
+   */
+  public detach() {
+    this.impls = [];
   }
 }
