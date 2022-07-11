@@ -14,10 +14,12 @@ import {
 } from './ConnectionController';
 import { SubscriptionController } from './SubscriptionController';
 import { Keystore } from './keystore';
+import { Clock } from './clock';
 
 export { NETWORK_PRESETS, ConnectionData, ConnectionProperties } from './ConnectionController';
 export { GqlSocketParams, JrpcSocketParams } from './ConnectionController';
 export { Keystore, Signer, SimpleKeystore } from './keystore';
+export { Clock } from './clock';
 export type { Ed25519KeyPair } from 'nekoton-wasm';
 
 const { ensureNekotonLoaded, nekoton } = core;
@@ -28,8 +30,21 @@ const { ensureNekotonLoaded, nekoton } = core;
  * @category Client
  */
 export type ClientProperties = {
-  connection: ConnectionProperties
+  /**
+   * Connection properties or network preset name
+   */
+  connection: ConnectionProperties,
+  /**
+   * Keystore which will be used for all methods with `accountInteraction`
+   */
   keystore?: Keystore,
+  /**
+   * Clock object which can be used to adjust time offset
+   */
+  clock?: Clock,
+  /**
+   * Explicit params for nekoton wasm loader
+   */
   initInput?: nt.InitInput | Promise<nt.InitInput>,
 };
 
@@ -106,16 +121,19 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     };
 
     const clock = new core.nekoton.ClockWithOffset();
+    if (params.clock != null) {
+      params.clock['impl'] = clock;
+    }
 
     const connectionController = await createConnectionController(clock, params.connection);
     const subscriptionController = new SubscriptionController(connectionController, notify);
 
     const client = new EverscaleStandaloneClient({
-      clock,
       permissions: {},
       connectionController,
       subscriptionController,
       keystore: params.keystore,
+      clock,
       notify,
     });
     // NOTE: WeakRef is not working here, so hope it will be garbage collected
@@ -138,11 +156,11 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
 }
 
 type Context = {
-  clock: nt.ClockWithOffset,
   permissions: Partial<ever.RawPermissions>,
   connectionController: ConnectionController,
   subscriptionController: SubscriptionController,
   keystore?: Keystore,
+  clock: nt.ClockWithOffset,
   notify: <T extends ever.ProviderEvent>(method: T, params: ever.RawProviderEventData<T>) => void
 }
 
