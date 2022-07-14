@@ -123,6 +123,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     const clock = new core.nekoton.ClockWithOffset();
     if (params.clock != null) {
       params.clock['impls'].push(clock);
+      clock.updateOffset(params.clock.offset);
     }
 
     try {
