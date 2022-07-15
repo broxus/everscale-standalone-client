@@ -27,7 +27,6 @@ export const NETWORK_PRESETS = {
         'lim01.main.everos.dev',
         'rbx01.main.everos.dev',
       ],
-      latencyDetectionInterval: 60000,
       local: false,
     },
   } as ConnectionData,
@@ -43,7 +42,6 @@ export const NETWORK_PRESETS = {
     type: 'graphql',
     data: {
       endpoints: ['eri01.net.everos.dev', 'rbx01.net.everos.dev', 'gra01.net.everos.dev'],
-      latencyDetectionInterval: 60000,
       local: false,
     },
   } as ConnectionData,
@@ -52,7 +50,6 @@ export const NETWORK_PRESETS = {
     type: 'graphql',
     data: {
       endpoints: ['gql.custler.net'],
-      latencyDetectionInterval: 60000,
       local: false,
     },
   } as ConnectionData,
@@ -61,7 +58,6 @@ export const NETWORK_PRESETS = {
     type: 'graphql',
     data: {
       endpoints: ['127.0.0.1'],
-      latencyDetectionInterval: 60000,
       local: true,
     },
   } as ConnectionData,

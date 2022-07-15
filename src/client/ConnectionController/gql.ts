@@ -11,19 +11,19 @@ export type GqlSocketParams = {
   /**
    * Path to graphql api endpoints, e.g. `https://main.ton.dev`
    */
-  endpoints: string[]
-  /**
-   * Frequency of sync latency detection
-   */
-  latencyDetectionInterval: number
-  /**
-   * Maximum value for the endpoint's blockchain data sync latency
-   */
-  maxLatency: number
+  endpoints: string[];
   /**
    * Gql node type
    */
-  local: boolean
+  local: boolean;
+  /**
+   * Frequency of sync latency detection
+   */
+  latencyDetectionInterval?: number;
+  /**
+   * Maximum value for the endpoint's blockchain data sync latency
+   */
+  maxLatency?: number;
 }
 
 export class GqlSocket {
@@ -33,6 +33,7 @@ export class GqlSocket {
   ): Promise<nt.GqlConnection> {
     class GqlSender implements nt.IGqlSender {
       private readonly params: GqlSocketParams;
+      private readonly latencyDetectionInterval: number;
       private readonly endpoints: string[];
       private nextLatencyDetectionTime: number = 0;
       private currentEndpoint?: string;
@@ -40,6 +41,7 @@ export class GqlSocket {
 
       constructor(params: GqlSocketParams) {
         this.params = params;
+        this.latencyDetectionInterval = params.latencyDetectionInterval || 60000;
         this.endpoints = params.endpoints.map(GqlSocket.expandAddress);
         if (this.endpoints.length == 1) {
           this.currentEndpoint = this.endpoints[0];
@@ -69,8 +71,7 @@ export class GqlSocket {
               this.resolutionPromise = this._selectQueryingEndpoint().then(
                 (endpoint) => {
                   this.currentEndpoint = endpoint;
-                  this.nextLatencyDetectionTime =
-                    Date.now() + this.params.latencyDetectionInterval;
+                  this.nextLatencyDetectionTime = Date.now() + this.latencyDetectionInterval;
                   return endpoint;
                 },
               );
