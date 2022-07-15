@@ -17,7 +17,7 @@ import { Keystore } from './keystore';
 import { Clock } from './clock';
 
 export { NETWORK_PRESETS, ConnectionData, ConnectionProperties } from './ConnectionController';
-export { GqlSocketParams, JrpcSocketParams } from './ConnectionController';
+export { GqlSocketParams, JrpcSocketParams, ConnectionError, checkConnection } from './ConnectionController';
 export { Keystore, Signer, SimpleKeystore } from './keystore';
 export { Clock } from './clock';
 export type { Ed25519KeyPair } from 'nekoton-wasm';
@@ -215,12 +215,15 @@ const subscribe: ProviderHandler<'subscribe'> = async (ctx, req) => {
   requireString(req, req.params, 'address');
   requireOptionalObject(req, req.params, 'subscriptions');
 
-  if (!nekoton.checkAddress(address)) {
-    throw invalidRequest(req, 'Invalid address');
+  let repackedAddress: string;
+  try {
+    repackedAddress = nekoton.repackAddress(address);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
   }
 
   try {
-    return await ctx.subscriptionController.subscribeToContract(address, subscriptions);
+    return await ctx.subscriptionController.subscribeToContract(repackedAddress, subscriptions);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -232,11 +235,14 @@ const unsubscribe: ProviderHandler<'unsubscribe'> = async (ctx, req) => {
   const { address } = req.params;
   requireString(req, req.params, 'address');
 
-  if (!nekoton.checkAddress(address)) {
-    throw invalidRequest(req, 'Invalid address');
+  let repackedAddress: string;
+  try {
+    repackedAddress = nekoton.repackAddress(address);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
   }
 
-  await ctx.subscriptionController.unsubscribeFromContract(address);
+  await ctx.subscriptionController.unsubscribeFromContract(repackedAddress);
   return undefined;
 };
 
@@ -620,8 +626,11 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
   requireFunctionCall(req, req.params, 'payload');
   requireOptionalBoolean(req, req.params, 'local');
 
-  if (!nekoton.checkAddress(recipient)) {
-    throw invalidRequest(req, 'Invalid recipient');
+  let repackedRecipient: string;
+  try {
+    repackedRecipient = nekoton.repackAddress(recipient);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
   }
 
   const { clock, subscriptionController } = ctx;
@@ -630,7 +639,7 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
   try {
     signedMessage = nekoton.createExternalMessageWithoutSignature(
       clock,
-      recipient,
+      repackedRecipient,
       payload.abi,
       payload.method,
       stateInit,
@@ -643,9 +652,9 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
 
   let transaction: nt.Transaction;
   if (local === true) {
-    transaction = await subscriptionController.sendMessageLocally(recipient, signedMessage);
+    transaction = await subscriptionController.sendMessageLocally(repackedRecipient, signedMessage);
   } else {
-    transaction = await subscriptionController.sendMessage(recipient, signedMessage);
+    transaction = await subscriptionController.sendMessage(repackedRecipient, signedMessage);
   }
 
   let output: ever.RawTokensObject | undefined;
@@ -716,8 +725,11 @@ const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, 
   requireFunctionCall(req, req.params, 'payload');
   requireOptionalBoolean(req, req.params, 'local');
 
-  if (!nekoton.checkAddress(recipient)) {
-    throw invalidRequest(req, 'Invalid recipient');
+  let repackedRecipient: string;
+  try {
+    repackedRecipient = nekoton.repackAddress(recipient);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
   }
 
   const { clock, subscriptionController, keystore } = ctx;
@@ -730,7 +742,7 @@ const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, 
   try {
     unsignedMessage = nekoton.createExternalMessage(
       clock,
-      recipient,
+      repackedRecipient,
       payload.abi,
       payload.method,
       stateInit,
@@ -754,9 +766,9 @@ const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, 
 
   let transaction: nt.Transaction;
   if (local === true) {
-    transaction = await subscriptionController.sendMessageLocally(recipient, signedMessage);
+    transaction = await subscriptionController.sendMessageLocally(repackedRecipient, signedMessage);
   } else {
-    transaction = await subscriptionController.sendMessage(recipient, signedMessage);
+    transaction = await subscriptionController.sendMessage(repackedRecipient, signedMessage);
   }
 
   let output: ever.RawTokensObject | undefined;

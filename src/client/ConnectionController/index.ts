@@ -68,22 +68,56 @@ export const NETWORK_PRESETS = {
  */
 export type ConnectionProperties = (keyof typeof NETWORK_PRESETS) | ConnectionData
 
-export async function createConnectionController(
-  clock: nt.ClockWithOffset,
-  params: ConnectionProperties,
-  retry: boolean = false,
-): Promise<ConnectionController> {
-  let preset: ConnectionData;
-
+function loadPreset(params: ConnectionProperties): ConnectionData {
   if (typeof params === 'string') {
     const targetPreset = NETWORK_PRESETS[params] as ConnectionData | undefined;
     if (targetPreset == null) {
       throw new Error(`Target preset id not found: ${params}`);
     }
-    preset = targetPreset;
+    return targetPreset;
   } else {
-    preset = params;
+    return params;
   }
+}
+
+/**
+ * Tries to connect with the specified params. Throws an exception in case of error
+ *
+ * @category Client
+ * @throws ConnectionError
+ */
+export async function checkConnection(params: ConnectionProperties): Promise<void> {
+  const preset = loadPreset(params);
+
+  const clock = new nekoton.ClockWithOffset();
+  try {
+    const controller = new ConnectionController(clock);
+    await controller['_connect'](preset);
+    if (controller['_initializedTransport'] != null) {
+      cleanupInitializedTransport(controller['_initializedTransport']);
+    }
+  } catch (e: any) {
+    throw new ConnectionError(preset, e.toString());
+  } finally {
+    clock.free();
+  }
+}
+
+/**
+ * @category Client
+ */
+export class ConnectionError extends Error {
+  constructor(public readonly params: ConnectionData, message: string) {
+    super(message);
+  }
+}
+
+export async function createConnectionController(
+  clock: nt.ClockWithOffset,
+  params: ConnectionProperties,
+  retry: boolean = false,
+): Promise<ConnectionController> {
+  const preset = loadPreset(params);
 
   // Try connect
   while (true) {
@@ -172,9 +206,8 @@ export class ConnectionController {
   }
 
   private async _connect(params: ConnectionData) {
-    if (this._initializedTransport) {
-      this._initializedTransport.data.transport.free();
-      this._initializedTransport.data.connection.free();
+    if (this._initializedTransport != null) {
+      cleanupInitializedTransport(this._initializedTransport);
     }
     this._initializedTransport = undefined;
 
@@ -183,25 +216,33 @@ export class ConnectionController {
       CANCELLED,
     }
 
-    const testTransport = async ({ data: { transport } }: InitializedTransport): Promise<TestConnectionResult> => {
+    const testTransport = async ({ data: { transport } }: InitializedTransport, local: boolean): Promise<TestConnectionResult> => {
       return new Promise<TestConnectionResult>((resolve, reject) => {
         this._cancelTestTransport = () => resolve(TestConnectionResult.CANCELLED);
 
-        // Try to get any account state
-        transport
-          .getFullContractState(
-            '-1:0000000000000000000000000000000000000000000000000000000000000000',
-          )
-          .then(() => resolve(TestConnectionResult.DONE))
-          .catch((e: any) => reject(e));
+        if (local) {
+          transport
+            .getAccountsByCodeHash(
+              '4e92716de61d456e58f16e4e867e3e93a7548321eace86301b51c8b80ca6239b', 1,
+            )
+            .then(() => resolve(TestConnectionResult.DONE))
+            .catch((e: any) => reject(e));
+        } else {
+          // Try to get any account state
+          transport
+            .getFullContractState(
+              '-1:0000000000000000000000000000000000000000000000000000000000000000',
+            )
+            .then(() => resolve(TestConnectionResult.DONE))
+            .catch((e: any) => reject(e));
+        }
 
         setTimeout(() => reject(new Error('Connection timeout')), 10000);
       }).finally(() => this._cancelTestTransport = undefined);
     };
 
     try {
-      // TODO: add jrpc transport
-      const { shouldTest, transportData } = await (params.type === 'graphql'
+      const { local, transportData } = await (params.type === 'graphql'
         ? async () => {
           const socket = new GqlSocket();
           const connection = await socket.connect(this._clock, params.data);
@@ -218,7 +259,7 @@ export class ConnectionController {
           };
 
           return {
-            shouldTest: !params.data.local,
+            local: params.data.local,
             transportData,
           };
         }
@@ -238,14 +279,20 @@ export class ConnectionController {
           };
 
           return {
-            shouldTest: true,
+            local: false,
             transportData,
           };
         })();
 
-      if (shouldTest && (await testTransport(transportData)) == TestConnectionResult.CANCELLED) {
-        transportData.data.transport.free();
-        return;
+      try {
+        if (await testTransport(transportData, local) == TestConnectionResult.CANCELLED) {
+          cleanupInitializedTransport(transportData);
+          return;
+        }
+      } catch (e) {
+        // Free transport data in case of error
+        cleanupInitializedTransport(transportData);
+        throw e;
       }
 
       this._initializedTransport = transportData;
@@ -282,6 +329,11 @@ export class ConnectionController {
       this._release = undefined;
     }
   }
+}
+
+function cleanupInitializedTransport(transport: InitializedTransport) {
+  transport.data.transport.free();
+  transport.data.connection.free();
 }
 
 interface INetworkSwitchHandle {

@@ -1,6 +1,6 @@
 {
   "name": "everscale-standalone-client",
-  "version": "2.0.17",
+  "version": "2.0.18",
   "repository": "https://github.com/broxus/everscale-standalone-client",
   "scripts": {
     "build": "tsc",
@@ -11,17 +11,17 @@
   "license": "GPL-3.0",
   "devDependencies": {
     "@types/events": "^3.0.0",
-    "@typescript-eslint/eslint-plugin": "^5.10.0",
-    "eslint": "^8.7.0",
-    "eslint-config-prettier": "^8.3.0",
-    "typescript": "^4.4.4"
+    "@typescript-eslint/eslint-plugin": "^5.30.6",
+    "eslint": "^8.19.0",
+    "eslint-config-prettier": "^8.5.0",
+    "typescript": "^4.7.4"
   },
   "dependencies": {
     "@broxus/await-semaphore": "^0.1.5",
     "events": "^3.3.0",
-    "everscale-inpage-provider": "^0.3.23",
+    "everscale-inpage-provider": "^0.3.28",
     "fast-safe-stringify": "^2.1.1",
-    "nekoton-wasm": "^0.5.7",
+    "nekoton-wasm": "^0.5.8",
     "node-fetch": "^2.6.7"
   },
   "types": "index.d.ts",
