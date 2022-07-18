@@ -899,7 +899,7 @@ function requireFunctionCall<O, P extends keyof O>(req: ever.RawProviderRequest<
 
 function requireMethodOrArray<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   const property = object[key];
-  if (typeof property !== 'string' && !Array.isArray(property)) {
+  if (property != null && typeof property !== 'string' && !Array.isArray(property)) {
     throw invalidRequest(req, `'${String(key)}' must be a method name or an array of possible names`);
   }
 }
