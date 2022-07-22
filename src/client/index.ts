@@ -163,6 +163,11 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     }
     return handler(this._context, req);
   }
+
+  prepareHighloadWalletTransfer(accountState: string, publicKey: string, gifts: nt.Gift[]): nt.UnsignedMessage | undefined {
+    return nekoton.walletPrepareTransfer(this._context.clock, accountState, "HighloadWalletV2", publicKey, gifts, 60 );
+  }
+
 }
 
 type Context = {
@@ -175,6 +180,7 @@ type Context = {
 }
 
 type ProviderHandler<T extends ever.ProviderMethod> = (ctx: Context, req: ever.RawProviderRequest<T>) => Promise<ever.RawProviderApiResponse<T>>;
+
 
 const requestPermissions: ProviderHandler<'requestPermissions'> = async (ctx, req) => {
   requireParams(req);
