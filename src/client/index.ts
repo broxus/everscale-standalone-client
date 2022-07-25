@@ -15,6 +15,7 @@ import {
 import { SubscriptionController } from './SubscriptionController';
 import { Keystore } from './keystore';
 import { Clock } from './clock';
+import {Address, FunctionCall} from "everscale-inpage-provider";
 
 export { NETWORK_PRESETS, ConnectionData, ConnectionProperties } from './ConnectionController';
 export { GqlSocketParams, JrpcSocketParams, ConnectionError, checkConnection } from './ConnectionController';
@@ -23,6 +24,11 @@ export { Clock } from './clock';
 export type { Ed25519KeyPair } from 'nekoton-wasm';
 
 const { ensureNekotonLoaded, nekoton } = core;
+
+type TransferOutput = {
+    transaction: nt.Transaction,
+    output: ever.RawTokensObject | undefined
+}
 
 /**
  * Standalone provider which is used as a fallback when browser extension is not installed
@@ -164,8 +170,65 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     return handler(this._context, req);
   }
 
-  prepareHighloadWalletTransfer(accountState: string, publicKey: string, gifts: nt.Gift[]): nt.UnsignedMessage | undefined {
-    return nekoton.walletPrepareTransfer(this._context.clock, accountState, "HighloadWalletV2", publicKey, gifts, 60 );
+  async sendTransfer(
+      accountState: string,
+      walletType: nt.WalletContractType,
+      publicKey: string,
+      recipient: string,
+      payload: FunctionCall,
+      gifts: nt.Gift[],
+      local: boolean
+  ): Promise<TransferOutput> {
+
+    let repackedRecipient: string;
+    try {
+      repackedRecipient = nekoton.repackAddress(recipient);
+    } catch (e: any) {
+      throw new Error(e.toString());
+    }
+
+    const signer = await this._context.keystore?.getSigner(publicKey);
+    if (signer == null) {
+      throw new Error('Signer not found for public key');
+    }
+
+    let unsignedMessage: nt.UnsignedMessage | undefined;
+    try {
+      unsignedMessage = nekoton.walletPrepareTransfer(this._context.clock, accountState, walletType, publicKey, gifts, 60 );
+    } catch (e: any) {
+      throw new Error(e.toString());
+    }
+
+    if (unsignedMessage === undefined) {
+        throw new Error("Failed to prepare message");
+    }
+
+    let signedMessage: nt.SignedMessage;
+    try {
+      const signature = await signer.sign(unsignedMessage.hash);
+      signedMessage = unsignedMessage.sign(signature);
+    } catch (e: any) {
+      throw new Error(e.toString());
+    } finally {
+      unsignedMessage.free();
+    }
+
+    let transaction: nt.Transaction;
+    if (local) {
+      transaction = await this._context.subscriptionController.sendMessageLocally(repackedRecipient, signedMessage);
+    } else {
+      transaction = await this._context.subscriptionController.sendMessage(repackedRecipient, signedMessage);
+    }
+
+    let output: ever.RawTokensObject | undefined;
+    try {
+      const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
+      output = decoded?.output;
+    } catch (_) {
+    }
+
+    return {transaction, output};
+
   }
 
 }
