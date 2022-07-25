@@ -15,7 +15,6 @@ import {
 import { SubscriptionController } from './SubscriptionController';
 import { Keystore } from './keystore';
 import { Clock } from './clock';
-import {Address, FunctionCall} from "everscale-inpage-provider";
 
 export { NETWORK_PRESETS, ConnectionData, ConnectionProperties } from './ConnectionController';
 export { GqlSocketParams, JrpcSocketParams, ConnectionError, checkConnection } from './ConnectionController';
@@ -24,11 +23,6 @@ export { Clock } from './clock';
 export type { Ed25519KeyPair } from 'nekoton-wasm';
 
 const { ensureNekotonLoaded, nekoton } = core;
-
-type TransferOutput = {
-    transaction: nt.Transaction,
-    output: ever.RawTokensObject | undefined
-}
 
 /**
  * Standalone provider which is used as a fallback when browser extension is not installed
@@ -171,15 +165,11 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
   }
 
   async sendTransfer(
-      accountState: string,
-      walletType: nt.WalletContractType,
-      publicKey: string,
-      recipient: string,
-      payload: FunctionCall,
-      gifts: nt.Gift[],
-      local: boolean
-  ): Promise<TransferOutput> {
-
+    walletType: nt.WalletContractType,
+    publicKey: string,
+    recipient: string,
+    gifts: nt.Gift[],
+  ): Promise<nt.Transaction> {
     let repackedRecipient: string;
     try {
       repackedRecipient = nekoton.repackAddress(recipient);
@@ -192,15 +182,22 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
       throw new Error('Signer not found for public key');
     }
 
+    const accountState = await this._context.connectionController.use(async ({ data: { transport } }) =>
+      (await transport.getFullContractState(repackedRecipient))?.boc,
+    );
+    if (accountState == null) {
+      throw new Error('Wallet does not exists');
+    }
+
     let unsignedMessage: nt.UnsignedMessage | undefined;
     try {
-      unsignedMessage = nekoton.walletPrepareTransfer(this._context.clock, accountState, walletType, publicKey, gifts, 60 );
+      unsignedMessage = nekoton.walletPrepareTransfer(this._context.clock, accountState, walletType, publicKey, gifts, 60);
     } catch (e: any) {
       throw new Error(e.toString());
     }
 
     if (unsignedMessage === undefined) {
-        throw new Error("Failed to prepare message");
+      throw new Error('Failed to prepare message');
     }
 
     let signedMessage: nt.SignedMessage;
@@ -213,24 +210,8 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
       unsignedMessage.free();
     }
 
-    let transaction: nt.Transaction;
-    if (local) {
-      transaction = await this._context.subscriptionController.sendMessageLocally(repackedRecipient, signedMessage);
-    } else {
-      transaction = await this._context.subscriptionController.sendMessage(repackedRecipient, signedMessage);
-    }
-
-    let output: ever.RawTokensObject | undefined;
-    try {
-      const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
-      output = decoded?.output;
-    } catch (_) {
-    }
-
-    return {transaction, output};
-
+    return this._context.subscriptionController.sendMessage(repackedRecipient, signedMessage);
   }
-
 }
 
 type Context = {
