@@ -164,6 +164,10 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     return handler(this._context, req);
   }
 
+  computeWalletAddress(workchain: number, walletType: nt.WalletContractType, publicKey: string): string {
+    return nekoton.computeWalletAddress(workchain, walletType, publicKey);
+  }
+
   async sendTransfer(
     walletType: nt.WalletContractType,
     publicKey: string,
