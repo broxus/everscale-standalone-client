@@ -35,7 +35,7 @@ export class GqlSocket {
       private readonly params: GqlSocketParams;
       private readonly latencyDetectionInterval: number;
       private readonly endpoints: string[];
-      private nextLatencyDetectionTime: number = 0;
+      private nextLatencyDetectionTime = 0;
       private currentEndpoint?: string;
       private resolutionPromise?: Promise<string>;
 
@@ -95,7 +95,7 @@ export class GqlSocket {
 
       private async _selectQueryingEndpoint(): Promise<string> {
         const maxLatency = this.params.maxLatency || 60000;
-        let endpointCount = this.endpoints.length;
+        const endpointCount = this.endpoints.length;
 
         for (let retryCount = 0; retryCount < 5; ++retryCount) {
           let handlers: { resolve: (endpoint: string) => void; reject: () => void };
@@ -155,7 +155,7 @@ export class GqlSocket {
   }
 
   static async checkLatency(endpoint: string): Promise<number | undefined> {
-    let response = await fetch(`${endpoint}?query=%7Binfo%7Bversion%20time%20latency%7D%7D`, {
+    const response = await fetch(`${endpoint}?query=%7Binfo%7Bversion%20time%20latency%7D%7D`, {
       method: 'get',
     })
       .then((response) => response.json())
@@ -168,17 +168,17 @@ export class GqlSocket {
       return;
     }
 
-    let data = response['data'];
-    if (typeof data !== 'object' || response == null) {
+    const data = response['data'];
+    if (typeof data !== 'object' || data == null) {
       return;
     }
 
-    let info = data['info'];
-    if (typeof info !== 'object' || response == null) {
+    const info = data['info'];
+    if (typeof info !== 'object' || info == null) {
       return;
     }
 
-    let latency = info['latency'];
+    const latency = info['latency'];
     if (typeof latency !== 'number') {
       return;
     }

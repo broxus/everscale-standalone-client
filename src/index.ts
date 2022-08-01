@@ -1,9 +1,9 @@
 import init, * as nt from 'nekoton-wasm';
 import core from './core';
 
-let clientInitializationStarted: boolean = false;
+let clientInitializationStarted = false;
 let notifyClientInitialized: { resolve: () => void, reject: () => void };
-let initializationPromise: Promise<void> = new Promise<void>((resolve, reject) => {
+const initializationPromise: Promise<void> = new Promise<void>((resolve, reject) => {
   notifyClientInitialized = { resolve, reject };
 });
 

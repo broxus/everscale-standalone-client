@@ -16,7 +16,7 @@ export class ContractSubscription {
   private _refreshTimer?: [number, () => void];
   private _pollingInterval: number = BACKGROUND_POLLING_INTERVAL;
   private _currentPollingMethod: nt.PollingMethod;
-  private _isRunning: boolean = false;
+  private _isRunning = false;
   private _currentBlockId?: string;
   private _suggestedBlockId?: string;
 
@@ -62,7 +62,7 @@ export class ContractSubscription {
 
     debugLog('ContractSubscription -> loop started');
 
-    this._loopPromise = new Promise<void>(async (resolve) => {
+    this._loopPromise = (async () => {
       const isSimple = !(this._connection instanceof nekoton.GqlConnection);
 
       this._isRunning = true;
@@ -156,9 +156,7 @@ export class ContractSubscription {
       }
 
       debugLog('ContractSubscription -> loop finished');
-
-      resolve();
-    });
+    })();
   }
 
   public skipRefreshTimer() {
@@ -232,4 +230,4 @@ type Connection = nt.GqlConnection | nt.JrpcConnection;
 
 const NEXT_BLOCK_TIMEOUT = 60; // 60s
 const INTENSIVE_POLLING_INTERVAL = 2000; // 2s
-const BACKGROUND_POLLING_INTERVAL: number = 60000;
+const BACKGROUND_POLLING_INTERVAL = 60000;

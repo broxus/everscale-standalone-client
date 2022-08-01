@@ -54,10 +54,10 @@ export class SimpleKeystore implements Keystore {
   }
 
   public removeKeyPair(id: string) {
-    const signer = this.signers.get(id)
+    const signer = this.signers.get(id);
     if (signer != null) {
-      this.signers.delete(id)
-      this.signersByPublicKey.delete(signer.publicKey)
+      this.signers.delete(id);
+      this.signersByPublicKey.delete(signer.publicKey);
     }
   }
 

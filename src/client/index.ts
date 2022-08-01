@@ -9,8 +9,6 @@ import {
   createConnectionController,
   ConnectionProperties,
   ConnectionController,
-  GqlSocketParams,
-  JrpcSocketParams,
 } from './ConnectionController';
 import { SubscriptionController } from './SubscriptionController';
 import { Keystore } from './keystore';
@@ -68,7 +66,7 @@ export const SUPPORTED_PERMISSIONS: ever.Permission[] = ['basic'];
  * @category Client
  */
 export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.Provider {
-  private _context: Context;
+  private readonly _context: Context;
   private _handlers: { [K in ever.ProviderMethod]?: ProviderHandler<K> } = {
     requestPermissions,
     // changeAccount, // not supported
@@ -107,14 +105,16 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     // decryptData, // not supported
     // estimateFees, // not supported
     // sendMessage, // not supported
+    // sendMessageDelayed, // not supported
     sendExternalMessage,
+    sendExternalMessageDelayed,
   };
 
   public static async create(params: ClientProperties): Promise<EverscaleStandaloneClient> {
     await ensureNekotonLoaded(params.initInput);
 
     // NOTE: capture client inside notify using wrapper object
-    let notificationContext: { client?: EverscaleStandaloneClient } = {};
+    const notificationContext: { client?: EverscaleStandaloneClient } = {};
 
     const notify = <T extends ever.ProviderEvent>(method: T, params: ever.RawProviderEventData<T>) => {
       notificationContext.client?.emit(method, params);
@@ -214,7 +214,11 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
       unsignedMessage.free();
     }
 
-    return this._context.subscriptionController.sendMessage(repackedRecipient, signedMessage);
+    const transaction = await this._context.subscriptionController.sendMessage(repackedRecipient, signedMessage);
+    if (transaction == null) {
+      throw new Error('Message expired');
+    }
+    return transaction;
   }
 }
 
@@ -306,8 +310,8 @@ const unsubscribeAll: ProviderHandler<'unsubscribeAll'> = async (ctx, _req) => {
 };
 
 const getProviderState: ProviderHandler<'getProviderState'> = async (ctx, req) => {
-  const selectedConnection = ctx.connectionController.currentConnectionGroup;
-  if (selectedConnection == null) {
+  const transport = ctx.connectionController.initializedTransport;
+  if (transport == null) {
     throw invalidRequest(req, 'Connection controller was not initialized');
   }
 
@@ -316,7 +320,8 @@ const getProviderState: ProviderHandler<'getProviderState'> = async (ctx, req) =
   return {
     version,
     numericVersion: convertVersionToInt32(version),
-    selectedConnection,
+    networkId: transport.id,
+    selectedConnection: transport.group,
     supportedPermissions: [...SUPPORTED_PERMISSIONS],
     permissions: { ...ctx.permissions },
     subscriptions: ctx.subscriptionController.subscriptionStates,
@@ -708,14 +713,18 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
   if (local === true) {
     transaction = await subscriptionController.sendMessageLocally(repackedRecipient, signedMessage);
   } else {
-    transaction = await subscriptionController.sendMessage(repackedRecipient, signedMessage);
+    const tx = await subscriptionController.sendMessage(repackedRecipient, signedMessage);
+    if (tx == null) {
+      throw invalidRequest(req, 'Message expired');
+    }
+    transaction = tx;
   }
 
   let output: ever.RawTokensObject | undefined;
   try {
     const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
     output = decoded?.output;
-  } catch (_) {
+  } catch (_) { /* do nothing */
   }
 
   return { transaction, output };
@@ -822,17 +831,89 @@ const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, 
   if (local === true) {
     transaction = await subscriptionController.sendMessageLocally(repackedRecipient, signedMessage);
   } else {
-    transaction = await subscriptionController.sendMessage(repackedRecipient, signedMessage);
+    const tx = await subscriptionController.sendMessage(repackedRecipient, signedMessage);
+    if (tx == null) {
+      throw invalidRequest(req, 'Message expired');
+    }
+    transaction = tx;
   }
 
   let output: ever.RawTokensObject | undefined;
   try {
     const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
     output = decoded?.output;
-  } catch (_) {
+  } catch (_) { /* do nothing */
   }
 
   return { transaction, output };
+};
+
+const sendExternalMessageDelayed: ProviderHandler<'sendExternalMessageDelayed'> = async (ctx, req) => {
+  requireKeystore(req, ctx);
+  requireParams(req);
+
+  const { publicKey, recipient, stateInit, payload } = req.params;
+  requireString(req, req.params, 'publicKey');
+  requireString(req, req.params, 'recipient');
+  requireOptionalString(req, req.params, 'stateInit');
+  requireFunctionCall(req, req.params, 'payload');
+
+  let repackedRecipient: string;
+  try {
+    repackedRecipient = nekoton.repackAddress(recipient);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+
+  const { clock, subscriptionController, keystore, notify } = ctx;
+  const signer = await keystore.getSigner(publicKey);
+  if (signer == null) {
+    throw invalidRequest(req, 'Signer not found for public key');
+  }
+
+  let unsignedMessage: nt.UnsignedMessage;
+  try {
+    unsignedMessage = nekoton.createExternalMessage(
+      clock,
+      repackedRecipient,
+      payload.abi,
+      payload.method,
+      stateInit,
+      payload.params,
+      publicKey,
+      60,
+    );
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+
+  let signedMessage: nt.SignedMessage;
+  try {
+    const signature = await signer.sign(unsignedMessage.hash);
+    signedMessage = unsignedMessage.sign(signature);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  } finally {
+    unsignedMessage.free();
+  }
+
+  subscriptionController.sendMessage(repackedRecipient, signedMessage)
+    .then(transaction => {
+      notify('messageStatusUpdated', {
+        address: repackedRecipient,
+        hash: signedMessage.hash,
+        transaction,
+      });
+    })
+    .catch(console.error);
+
+  return {
+    message: {
+      account: repackedRecipient,
+      hash: signedMessage.hash,
+      expireAt: signedMessage.expireAt,
+    },
+  };
 };
 
 
@@ -945,7 +1026,7 @@ function requireContractState<O, P extends keyof O>(req: ever.RawProviderRequest
 
 function requireFunctionCall<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
   requireObject(req, object, key);
-  const property = (object[key] as unknown) as ever.RawFunctionCall;
+  const property = (object[key] as unknown) as ever.FunctionCall<string>;
   requireString(req, property, 'abi');
   requireString(req, property, 'method');
   requireObject(req, property, 'params');

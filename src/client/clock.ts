@@ -8,7 +8,7 @@ import type * as nt from 'nekoton-wasm';
 export class Clock {
   private impls: nt.ClockWithOffset[] = [];
 
-  private currentOffset: number = 0;
+  private currentOffset = 0;
 
   constructor(offset?: number) {
     if (offset != null) {

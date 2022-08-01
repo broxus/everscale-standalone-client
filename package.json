@@ -1,25 +1,27 @@
 {
   "name": "everscale-standalone-client",
-  "version": "2.0.21",
+  "version": "2.0.22",
   "repository": "https://github.com/broxus/everscale-standalone-client",
   "scripts": {
     "build": "tsc",
     "publish": "cp package.json dist/package.json && cp README.md dist/README.md && cp LICENSE dist/LICENSE && cd dist && npm publish",
-    "lint": "eslint"
+    "lint": "npx eslint ."
   },
   "author": "",
   "license": "GPL-3.0",
   "devDependencies": {
     "@types/events": "^3.0.0",
-    "@typescript-eslint/eslint-plugin": "^5.30.6",
-    "eslint": "^8.19.0",
+    "@typescript-eslint/eslint-plugin": "^5.31.0",
+    "@typescript-eslint/parser": "^5.31.0",
+    "eslint": "^8.21.0",
     "eslint-config-prettier": "^8.5.0",
+    "eslint-plugin-prettier": "^4.2.1",
     "typescript": "^4.7.4"
   },
   "dependencies": {
     "@broxus/await-semaphore": "^0.1.5",
     "events": "^3.3.0",
-    "everscale-inpage-provider": "^0.3.28",
+    "everscale-inpage-provider": "^0.3.29",
     "fast-safe-stringify": "^2.1.1",
     "nekoton-wasm": "^0.5.11",
     "node-fetch": "^2.6.7"

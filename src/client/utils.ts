@@ -79,7 +79,7 @@ export class SafeEventEmitter extends EventEmitter {
  * @category Utils
  */
 export const convertVersionToInt32 = (version: string): number => {
-  let parts = version.split('.');
+  const parts = version.split('.');
   if (parts.length !== 3) {
     throw new Error('Received invalid version string');
   }

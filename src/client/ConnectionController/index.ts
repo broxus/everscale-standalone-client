@@ -17,6 +17,7 @@ export const DEFAULT_NETWORK_GROUP = 'mainnet';
  */
 export const NETWORK_PRESETS = {
   mainnet: {
+    id: 1,
     group: 'mainnet',
     type: 'graphql',
     data: {
@@ -31,6 +32,7 @@ export const NETWORK_PRESETS = {
     },
   } as ConnectionData,
   mainnetJrpc: {
+    id: 1,
     group: 'mainnet',
     type: 'jrpc',
     data: {
@@ -38,6 +40,7 @@ export const NETWORK_PRESETS = {
     },
   } as ConnectionData,
   testnet: {
+    id: 2,
     group: 'testnet',
     type: 'graphql',
     data: {
@@ -46,6 +49,7 @@ export const NETWORK_PRESETS = {
     },
   } as ConnectionData,
   fld: {
+    id: 10,
     group: 'fld',
     type: 'graphql',
     data: {
@@ -54,6 +58,7 @@ export const NETWORK_PRESETS = {
     },
   } as ConnectionData,
   local: {
+    id: 31337,
     group: 'localnet',
     type: 'graphql',
     data: {
@@ -115,7 +120,7 @@ export class ConnectionError extends Error {
 export async function createConnectionController(
   clock: nt.ClockWithOffset,
   params: ConnectionProperties,
-  retry: boolean = false,
+  retry = false,
 ): Promise<ConnectionController> {
   const preset = loadPreset(params);
 
@@ -145,7 +150,7 @@ export class ConnectionController {
   private _initializedTransport?: InitializedTransport;
   private _networkMutex: Mutex = new Mutex();
   private _release?: () => void;
-  private _acquiredTransportCounter: number = 0;
+  private _acquiredTransportCounter = 0;
   private _cancelTestTransport?: () => void;
 
   constructor(clock: nt.ClockWithOffset) {
@@ -201,8 +206,8 @@ export class ConnectionController {
     return new NetworkSwitchHandle(this, release, params);
   }
 
-  public get currentConnectionGroup(): string | undefined {
-    return this._initializedTransport?.group;
+  public get initializedTransport(): InitializedTransport | undefined {
+    return this._initializedTransport;
   }
 
   private async _connect(params: ConnectionData) {
@@ -249,6 +254,7 @@ export class ConnectionController {
           const transport = nekoton.Transport.fromGqlConnection(connection);
 
           const transportData: InitializedTransport = {
+            id: params.id,
             group: params.group,
             type: 'graphql',
             data: {
@@ -269,6 +275,7 @@ export class ConnectionController {
           const transport = nekoton.Transport.fromJrpcConnection(connection);
 
           const transportData: InitializedTransport = {
+            id: params.id,
             group: params.group,
             type: 'jrpc',
             data: {
@@ -350,7 +357,7 @@ function requireInitializedTransport(transport?: InitializedTransport): asserts 
 /**
  * @category Client
  */
-export type ConnectionData = { group: string } & (
+export type ConnectionData = { id: number, group: string } & (
   | { type: 'graphql', data: GqlSocketParams }
   | { type: 'jrpc', data: JrpcSocketParams }
   )
@@ -358,7 +365,7 @@ export type ConnectionData = { group: string } & (
 /**
  * @category Client
  */
-export type InitializedTransport = { group: string } & (
+export type InitializedTransport = { id: number, group: string } & (
   | { type: 'graphql', data: { socket: GqlSocket, connection: nt.GqlConnection, transport: nt.Transport } }
   | { type: 'jrpc', data: { socket: JrpcSocket, connection: nt.JrpcConnection, transport: nt.Transport } }
   )

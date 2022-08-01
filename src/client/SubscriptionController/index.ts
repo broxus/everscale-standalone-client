@@ -38,32 +38,32 @@ export class SubscriptionController {
       contract.sendMessageLocally(signedMessage));
   }
 
-  public async sendMessage(address: string, signedMessage: nt.SignedMessage) {
-    let messageRequests = await this._sendMessageRequests.get(address);
+  public sendMessage(address: string, signedMessage: nt.SignedMessage): Promise<nt.Transaction | undefined> {
+    let messageRequests = this._sendMessageRequests.get(address);
     if (messageRequests == null) {
       messageRequests = new Map();
       this._sendMessageRequests.set(address, messageRequests);
     }
 
-    return new Promise<nt.Transaction>(async (resolve, reject) => {
+    return new Promise<nt.Transaction | undefined>((resolve, reject) => {
       const id = signedMessage.hash;
       messageRequests!.set(id, { resolve, reject });
 
-      await this.subscribeToContract(address, { state: true });
-      const subscription = this._subscriptions.get(address);
-      if (subscription == null) {
-        throw new Error('Failed to subscribe to contract');
-      }
+      this.subscribeToContract(address, { state: true })
+        .then(async () => {
+          const subscription = this._subscriptions.get(address);
+          if (subscription == null) {
+            throw new Error('Failed to subscribe to contract');
+          }
 
-      await subscription.prepareReliablePolling();
-      await subscription
-        .use(async (contract) => {
-          await contract.sendMessage(signedMessage);
-          subscription.skipRefreshTimer();
+          await subscription.prepareReliablePolling();
+          await subscription
+            .use(async (contract) => {
+              await contract.sendMessage(signedMessage);
+              subscription.skipRefreshTimer();
+            });
         })
-        .catch((e: any) => {
-          this._rejectMessageRequest(address, id, e);
-        });
+        .catch((e: any) => this._rejectMessageRequest(address, id, e));
     });
   }
 
@@ -121,24 +121,24 @@ export class SubscriptionController {
   }
 
   public async unsubscribeFromAllContracts() {
-    const subscriptions = Array.from(this._subscriptions.keys());
-    for (const address of subscriptions) {
+    for (const address of this._subscriptions.keys()) {
       await this.unsubscribeFromContract(address);
     }
   }
 
   public get subscriptionStates(): { [address: string]: ever.ContractUpdatesSubscription } {
-    return [...this._subscriptionStates].reduce((obj, [key, value]) => {
-      obj[key] = value;
-      return obj;
-    }, {} as { [address: string]: ever.ContractUpdatesSubscription });
+    const result: { [address: string]: ever.ContractUpdatesSubscription } = {};
+    for (const [key, value] of this._subscriptionStates.entries()) {
+      result[key] = value;
+    }
+    return result;
   }
 
   private async _createSubscription(address: string) {
     class ContractHandler implements IContractHandler<nt.Transaction> {
       private readonly _address: string;
       private readonly _controller: SubscriptionController;
-      private _enabled: boolean = false;
+      private _enabled = false;
 
       constructor(address: string, controller: SubscriptionController) {
         this._address = address;
@@ -152,7 +152,7 @@ export class SubscriptionController {
       onMessageExpired(pendingTransaction: nt.PendingTransaction) {
         if (this._enabled) {
           this._controller
-            ._rejectMessageRequest(this._address, pendingTransaction.messageHash, new Error(`Message expired`))
+            ._resolveMessageRequest(this._address, pendingTransaction.messageHash, undefined)
             .catch(console.error);
         }
       }
@@ -204,7 +204,7 @@ export class SubscriptionController {
     await this._subscriptionsMutex.use(async () => this._tryUnsubscribe(address));
   }
 
-  private async _resolveMessageRequest(address: string, id: string, transaction: nt.Transaction) {
+  private async _resolveMessageRequest(address: string, id: string, transaction?: nt.Transaction) {
     this._deleteMessageRequestAndGetCallback(address, id).resolve(transaction);
     await this._subscriptionsMutex.use(async () => this._tryUnsubscribe(address));
   }
@@ -258,6 +258,6 @@ const makeDefaultSubscriptionState = (): ever.ContractUpdatesSubscription => ({
 });
 
 export type SendMessageCallback = {
-  resolve: (transaction: nt.Transaction) => void;
+  resolve: (transaction?: nt.Transaction) => void;
   reject: (error?: Error) => void;
 };
