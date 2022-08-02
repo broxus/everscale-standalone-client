@@ -11,11 +11,13 @@ import {
   ConnectionController,
 } from './ConnectionController';
 import { SubscriptionController } from './SubscriptionController';
+import { AccountsStorage } from './accountsStorage';
 import { Keystore } from './keystore';
 import { Clock } from './clock';
 
 export { NETWORK_PRESETS, ConnectionData, ConnectionProperties } from './ConnectionController';
 export { GqlSocketParams, JrpcSocketParams, ConnectionError, checkConnection } from './ConnectionController';
+export { Account, AccountsStorage, SimpleAccountsStorage, PrepareMessageParams } from './accountsStorage';
 export { Keystore, Signer, SimpleKeystore } from './keystore';
 export { Clock } from './clock';
 export type { Ed25519KeyPair } from 'nekoton-wasm';
@@ -36,6 +38,10 @@ export type ClientProperties = {
    * Keystore which will be used for all methods with `accountInteraction`
    */
   keystore?: Keystore,
+  /**
+   * Accounts storage which will be used to send internal messages
+   */
+  accountsStorage?: AccountsStorage,
   /**
    * Clock object which can be used to adjust time offset
    */
@@ -104,8 +110,8 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     // encryptData, // not supported
     // decryptData, // not supported
     // estimateFees, // not supported
-    // sendMessage, // not supported
-    // sendMessageDelayed, // not supported
+    sendMessage,
+    sendMessageDelayed,
     sendExternalMessage,
     sendExternalMessageDelayed,
   };
@@ -135,6 +141,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
         connectionController,
         subscriptionController,
         keystore: params.keystore,
+        accountsStorage: params.accountsStorage,
         clock,
         notify,
       });
@@ -227,6 +234,7 @@ type Context = {
   connectionController: ConnectionController,
   subscriptionController: SubscriptionController,
   keystore?: Keystore,
+  accountsStorage?: AccountsStorage,
   clock: nt.ClockWithOffset,
   notify: <T extends ever.ProviderEvent>(method: T, params: ever.RawProviderEventData<T>) => void
 }
@@ -777,6 +785,121 @@ const signDataRaw: ProviderHandler<'signDataRaw'> = async (ctx, req) => {
   }
 };
 
+const sendMessage: ProviderHandler<'sendMessage'> = async (ctx, req) => {
+  requireKeystore(req, ctx);
+  requireAccountsStorage(req, ctx);
+  requireParams(req);
+
+  const { sender, recipient, amount, bounce, payload } = req.params;
+  requireString(req, req.params, 'sender');
+  requireString(req, req.params, 'recipient');
+  requireString(req, req.params, 'amount');
+  requireBoolean(req, req.params, 'bounce');
+  requireOptional(req, req.params, 'payload', requireFunctionCall);
+
+  const { clock, subscriptionController, keystore, accountsStorage } = ctx;
+
+  let repackedSender: string;
+  let repackedRecipient: string;
+  try {
+    repackedSender = nekoton.repackAddress(sender);
+    repackedRecipient = nekoton.repackAddress(recipient);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+
+  let signedMessage: nt.SignedMessage;
+  try {
+    const account = await accountsStorage.getAccount(repackedSender);
+    if (account == null) {
+      throw new Error('Sender not found');
+    }
+
+    signedMessage = await account.prepareMessage({
+      recipient: repackedRecipient,
+      amount,
+      bounce,
+      payload,
+      stateInit: undefined,
+    }, {
+      clock,
+      keystore,
+    });
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+
+  const transaction = await subscriptionController.sendMessage(repackedSender, signedMessage);
+  if (transaction == null) {
+    throw invalidRequest(req, 'Message expired');
+  }
+
+  return { transaction };
+};
+
+const sendMessageDelayed: ProviderHandler<'sendMessageDelayed'> = async (ctx, req) => {
+  requireKeystore(req, ctx);
+  requireAccountsStorage(req, ctx);
+  requireParams(req);
+
+  const { sender, recipient, amount, bounce, payload } = req.params;
+  requireString(req, req.params, 'sender');
+  requireString(req, req.params, 'recipient');
+  requireString(req, req.params, 'amount');
+  requireBoolean(req, req.params, 'bounce');
+  requireOptional(req, req.params, 'payload', requireFunctionCall);
+
+  const { clock, subscriptionController, keystore, accountsStorage, notify } = ctx;
+
+  let repackedSender: string;
+  let repackedRecipient: string;
+  try {
+    repackedSender = nekoton.repackAddress(sender);
+    repackedRecipient = nekoton.repackAddress(recipient);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+
+  let signedMessage: nt.SignedMessage;
+  try {
+    const account = await accountsStorage.getAccount(repackedSender);
+    if (account == null) {
+      throw new Error('Sender not found');
+    }
+
+    signedMessage = await account.prepareMessage({
+      recipient: repackedRecipient,
+      amount,
+      bounce,
+      payload,
+      stateInit: undefined,
+    }, {
+      clock,
+      keystore,
+    });
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+
+  subscriptionController.sendMessage(repackedSender, signedMessage)
+    .then(transaction => {
+      notify('messageStatusUpdated', {
+        address: repackedSender,
+        hash: signedMessage.hash,
+        transaction,
+      });
+    })
+    .catch(console.error);
+
+  return {
+    message: {
+      account: repackedSender,
+      hash: signedMessage.hash,
+      expireAt: signedMessage.expireAt,
+    },
+  };
+};
+
 const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, req) => {
   requireKeystore(req, ctx);
   requireParams(req);
@@ -920,6 +1043,12 @@ const sendExternalMessageDelayed: ProviderHandler<'sendExternalMessageDelayed'> 
 function requireKeystore(req: any, context: Context): asserts context is Context & { keystore: Keystore } {
   if (context.keystore == null) {
     throw invalidRequest(req, 'Keystore not found');
+  }
+}
+
+function requireAccountsStorage(req: any, context: Context): asserts context is Context & { accountsStorage: AccountsStorage } {
+  if (context.accountsStorage == null) {
+    throw invalidRequest(req, 'AccountsStorage not found');
   }
 }
 
