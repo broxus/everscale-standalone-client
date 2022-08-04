@@ -47,10 +47,49 @@ export type ClientProperties = {
    */
   clock?: Clock,
   /**
+   * Message behaviour properties
+   */
+  message?: MessageProperties,
+  /**
    * Explicit params for nekoton wasm loader
    */
   initInput?: nt.InitInput | Promise<nt.InitInput>,
 };
+
+/**
+ * Message behaviour properties
+ *
+ * @category Client
+ */
+export type MessageProperties = {
+  /**
+   * Number of attempts to send a message
+   *
+   * @default 5
+   */
+  retryCount?: number,
+  /**
+   * Message expiration timeout (seconds)
+   *
+   * @default 60
+   */
+  timeout?: number,
+  /**
+   * Message expiration timeout grow factor for each new retry
+   *
+   * @default 1.2
+   */
+  timeoutGrowFactor?: number;
+}
+
+function validateMessageProperties(message?: MessageProperties): Required<MessageProperties> {
+  const m = message || {};
+  return {
+    retryCount: m.retryCount != null ? Math.max(1, ~~m.retryCount) : 5,
+    timeout: m.timeout != null ? Math.max(1, ~~m.timeout) : 60,
+    timeoutGrowFactor: m.timeoutGrowFactor || 1.2,
+  };
+}
 
 /**
  * @category Client
@@ -140,6 +179,9 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
         permissions: {},
         connectionController,
         subscriptionController,
+        properties: {
+          message: validateMessageProperties(params.message),
+        },
         keystore: params.keystore,
         accountsStorage: params.accountsStorage,
         clock,
@@ -233,10 +275,15 @@ type Context = {
   permissions: Partial<ever.RawPermissions>,
   connectionController: ConnectionController,
   subscriptionController: SubscriptionController,
+  properties: Properties,
   keystore?: Keystore,
   accountsStorage?: AccountsStorage,
   clock: nt.ClockWithOffset,
   notify: <T extends ever.ProviderEvent>(method: T, params: ever.RawProviderEventData<T>) => void
+}
+
+type Properties = {
+  message: Required<MessageProperties>,
 }
 
 type ProviderHandler<T extends ever.ProviderMethod> = (ctx: Context, req: ever.RawProviderRequest<T>) => Promise<ever.RawProviderApiResponse<T>>;
@@ -700,44 +747,67 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
     throw invalidRequest(req, e.toString());
   }
 
-  const { clock, subscriptionController } = ctx;
+  const { clock, subscriptionController, properties } = ctx;
 
-  let signedMessage: nt.SignedMessage;
-  try {
-    signedMessage = nekoton.createExternalMessageWithoutSignature(
-      clock,
-      repackedRecipient,
-      payload.abi,
-      payload.method,
-      stateInit,
-      payload.params,
-      60,
-    );
-  } catch (e: any) {
-    throw invalidRequest(req, e.toString());
-  }
-
-  let transaction: nt.Transaction;
-  if (local === true) {
-    transaction = await subscriptionController.sendMessageLocally(repackedRecipient, signedMessage);
-  } else {
-    const tx = await subscriptionController.sendMessage(repackedRecipient, signedMessage);
-    if (tx == null) {
-      throw invalidRequest(req, 'Message expired');
+  const makeSignedMessage = (timeout: number): nt.SignedMessage => {
+    try {
+      return nekoton.createExternalMessageWithoutSignature(
+        clock,
+        repackedRecipient,
+        payload.abi,
+        payload.method,
+        stateInit,
+        payload.params,
+        timeout,
+      );
+    } catch (e: any) {
+      throw invalidRequest(req, e.toString());
     }
-    transaction = tx;
+  };
+
+  const handleTransaction = (transaction: nt.Transaction) => {
+    let output: ever.RawTokensObject | undefined;
+    try {
+      const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
+      output = decoded?.output;
+    } catch (_) { /* do nothing */
+    }
+
+    return { transaction, output };
+  };
+
+  // Force local execution
+  if (local === true) {
+    const signedMessage = makeSignedMessage(60);
+    const transaction = await subscriptionController.sendMessageLocally(repackedRecipient, signedMessage);
+    return handleTransaction(transaction);
   }
 
-  let output: ever.RawTokensObject | undefined;
-  try {
-    const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
-    output = decoded?.output;
-  } catch (_) { /* do nothing */
+  // Send and wait with several retries
+  let timeout = properties.message.timeout;
+  for (let retry = 0; retry < properties.message.retryCount; ++retry) {
+    const signedMessage = makeSignedMessage(timeout);
+
+    const transaction = await subscriptionController.sendMessage(repackedRecipient, signedMessage);
+    if (transaction == null) {
+      timeout *= properties.message.timeoutGrowFactor;
+      continue;
+    }
+
+    return handleTransaction(transaction);
   }
 
-  return { transaction, output };
+  // Execute locally
+  const errorMessage = 'Message expired';
+  const signedMessage = makeSignedMessage(60);
+  const transaction = await subscriptionController.sendMessageLocally(repackedRecipient, signedMessage)
+    .catch((e) => {
+      throw invalidRequest(req, `${errorMessage}. ${e.toString()}`);
+    });
+
+  const additionalText = transaction.exitCode != null ? `. Possible exit code: ${transaction.exitCode}` : '';
+  throw invalidRequest(req, `${errorMessage}${additionalText}`);
 };
-
 
 const signData: ProviderHandler<'signData'> = async (ctx, req) => {
   requireKeystore(req, ctx);
@@ -918,57 +988,81 @@ const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, 
     throw invalidRequest(req, e.toString());
   }
 
-  const { clock, subscriptionController, keystore } = ctx;
+  const { clock, subscriptionController, keystore, properties } = ctx;
   const signer = await keystore.getSigner(publicKey);
   if (signer == null) {
     throw invalidRequest(req, 'Signer not found for public key');
   }
 
-  let unsignedMessage: nt.UnsignedMessage;
-  try {
-    unsignedMessage = nekoton.createExternalMessage(
-      clock,
-      repackedRecipient,
-      payload.abi,
-      payload.method,
-      stateInit,
-      payload.params,
-      publicKey,
-      60,
-    );
-  } catch (e: any) {
-    throw invalidRequest(req, e.toString());
-  }
-
-  let signedMessage: nt.SignedMessage;
-  try {
-    const signature = await signer.sign(unsignedMessage.hash);
-    signedMessage = unsignedMessage.sign(signature);
-  } catch (e: any) {
-    throw invalidRequest(req, e.toString());
-  } finally {
-    unsignedMessage.free();
-  }
-
-  let transaction: nt.Transaction;
-  if (local === true) {
-    transaction = await subscriptionController.sendMessageLocally(repackedRecipient, signedMessage);
-  } else {
-    const tx = await subscriptionController.sendMessage(repackedRecipient, signedMessage);
-    if (tx == null) {
-      throw invalidRequest(req, 'Message expired');
+  const makeSignedMessage = async (timeout: number): Promise<nt.SignedMessage> => {
+    let unsignedMessage: nt.UnsignedMessage;
+    try {
+      unsignedMessage = nekoton.createExternalMessage(
+        clock,
+        repackedRecipient,
+        payload.abi,
+        payload.method,
+        stateInit,
+        payload.params,
+        publicKey,
+        timeout,
+      );
+    } catch (e: any) {
+      throw invalidRequest(req, e.toString());
     }
-    transaction = tx;
+
+    try {
+      const signature = await signer.sign(unsignedMessage.hash);
+      return unsignedMessage.sign(signature);
+    } catch (e: any) {
+      throw invalidRequest(req, e.toString());
+    } finally {
+      unsignedMessage.free();
+    }
+  };
+
+  const handleTransaction = (transaction: nt.Transaction) => {
+    let output: ever.RawTokensObject | undefined;
+    try {
+      const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
+      output = decoded?.output;
+    } catch (_) { /* do nothing */
+    }
+
+    return { transaction, output };
+  };
+
+  // Force local execution
+  if (local === true) {
+    const signedMessage = await makeSignedMessage(60);
+    const transaction = await subscriptionController.sendMessageLocally(repackedRecipient, signedMessage);
+    return handleTransaction(transaction);
   }
 
-  let output: ever.RawTokensObject | undefined;
-  try {
-    const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
-    output = decoded?.output;
-  } catch (_) { /* do nothing */
+  // Send and wait with several retries
+  let timeout = properties.message.timeout;
+  for (let retry = 0; retry < properties.message.retryCount; ++retry) {
+    const signedMessage = await makeSignedMessage(timeout);
+
+    const transaction = await subscriptionController.sendMessage(repackedRecipient, signedMessage);
+    if (transaction == null) {
+      timeout *= properties.message.timeoutGrowFactor;
+      continue;
+    }
+
+    return handleTransaction(transaction);
   }
 
-  return { transaction, output };
+  // Execute locally
+  const errorMessage = 'Message expired';
+  const signedMessage = await makeSignedMessage(60);
+  const transaction = await subscriptionController.sendMessageLocally(repackedRecipient, signedMessage)
+    .catch((e) => {
+      throw invalidRequest(req, `${errorMessage}. ${e.toString()}`);
+    });
+
+  const additionalText = transaction.exitCode != null ? `. Possible exit code: ${transaction.exitCode}` : '';
+  throw invalidRequest(req, `${errorMessage}${additionalText}`);
 };
 
 const sendExternalMessageDelayed: ProviderHandler<'sendExternalMessageDelayed'> = async (ctx, req) => {
@@ -988,7 +1082,7 @@ const sendExternalMessageDelayed: ProviderHandler<'sendExternalMessageDelayed'> 
     throw invalidRequest(req, e.toString());
   }
 
-  const { clock, subscriptionController, keystore, notify } = ctx;
+  const { clock, subscriptionController, keystore, properties, notify } = ctx;
   const signer = await keystore.getSigner(publicKey);
   if (signer == null) {
     throw invalidRequest(req, 'Signer not found for public key');
@@ -1004,7 +1098,7 @@ const sendExternalMessageDelayed: ProviderHandler<'sendExternalMessageDelayed'> 
       stateInit,
       payload.params,
       publicKey,
-      60,
+      properties.message.timeout,
     );
   } catch (e: any) {
     throw invalidRequest(req, e.toString());

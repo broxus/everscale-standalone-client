@@ -1,6 +1,6 @@
 {
   "name": "everscale-standalone-client",
-  "version": "2.0.24",
+  "version": "2.0.25",
   "repository": "https://github.com/broxus/everscale-standalone-client",
   "scripts": {
     "build": "tsc",
