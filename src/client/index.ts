@@ -213,6 +213,30 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     return handler(this._context, req);
   }
 
+  addListener<T extends ever.ProviderEvent>(eventName: T, listener: (data: ever.RawProviderEventData<T>) => void): this {
+    return super.addListener(eventName, listener);
+  }
+
+  removeListener<T extends ever.ProviderEvent>(eventName: T, listener: (data: ever.RawProviderEventData<T>) => void): this {
+    return super.removeListener(eventName, listener);
+  }
+
+  on<T extends ever.ProviderEvent>(eventName: T, listener: (data: ever.RawProviderEventData<T>) => void): this {
+    return super.on(eventName, listener);
+  }
+
+  once<T extends ever.ProviderEvent>(eventName: T, listener: (data: ever.RawProviderEventData<T>) => void): this {
+    return super.once(eventName, listener);
+  }
+
+  prependListener<T extends ever.ProviderEvent>(eventName: T, listener: (data: ever.RawProviderEventData<T>) => void): this {
+    return super.prependListener(eventName, listener);
+  }
+
+  prependOnceListener<T extends ever.ProviderEvent>(eventName: T, listener: (data: ever.RawProviderEventData<T>) => void): this {
+    return super.prependOnceListener(eventName, listener);
+  }
+
   computeWalletAddress(workchain: number, walletType: nt.WalletContractType, publicKey: string): string {
     return nekoton.computeWalletAddress(workchain, walletType, publicKey);
   }
