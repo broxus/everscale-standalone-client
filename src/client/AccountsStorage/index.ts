@@ -1,7 +1,10 @@
 import type * as ever from 'everscale-inpage-provider';
 import type * as nt from 'nekoton-wasm';
 
-import { Keystore } from './keystore';
+import { Keystore } from '../keystore';
+import { ConnectionController } from '../ConnectionController';
+
+export { GiverAccount } from './giver';
 
 /**
  * @category AccountsStorage
@@ -63,6 +66,10 @@ export type PrepareMessageParams = {
    * Optional function call
    */
   payload?: ever.FunctionCall<string>;
+  /**
+   * External message timeout
+   */
+  timeout: number;
 };
 
 /**
@@ -77,6 +84,14 @@ export type PrepareMessageContext = {
    * Provider keystore
    */
   keystore: Keystore,
+  /**
+   * Connection controller
+   */
+  connectionController: ConnectionController,
+  /**
+   * Initialized instance of nekoton-wasm
+   */
+  nekoton: typeof nt,
 }
 
 /**

@@ -11,13 +11,13 @@ import {
   ConnectionController,
 } from './ConnectionController';
 import { SubscriptionController } from './SubscriptionController';
-import { AccountsStorage } from './accountsStorage';
+import { Account, AccountsStorage } from './AccountsStorage';
 import { Keystore } from './keystore';
 import { Clock } from './clock';
 
 export { NETWORK_PRESETS, ConnectionData, ConnectionProperties } from './ConnectionController';
 export { GqlSocketParams, JrpcSocketParams, ConnectionError, checkConnection } from './ConnectionController';
-export { Account, AccountsStorage, SimpleAccountsStorage, PrepareMessageParams } from './accountsStorage';
+export * from './AccountsStorage';
 export { Keystore, Signer, SimpleKeystore } from './keystore';
 export { Clock } from './clock';
 export type { Ed25519KeyPair } from 'nekoton-wasm';
@@ -80,6 +80,12 @@ export type MessageProperties = {
    * @default 1.2
    */
   timeoutGrowFactor?: number;
+  /**
+   * Retry internal transfers (`sendMessage` / `sendMessageDelayed`)
+   *
+   * @default true
+   */
+  retryTransfers?: boolean;
 }
 
 function validateMessageProperties(message?: MessageProperties): Required<MessageProperties> {
@@ -88,6 +94,7 @@ function validateMessageProperties(message?: MessageProperties): Required<Messag
     retryCount: m.retryCount != null ? Math.max(1, ~~m.retryCount) : 5,
     timeout: m.timeout != null ? Math.max(1, ~~m.timeout) : 60,
     timeoutGrowFactor: m.timeoutGrowFactor || 1.2,
+    retryTransfers: true,
   };
 }
 
@@ -235,63 +242,6 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
 
   prependOnceListener<T extends ever.ProviderEvent>(eventName: T, listener: (data: ever.RawProviderEventData<T>) => void): this {
     return super.prependOnceListener(eventName, listener);
-  }
-
-  computeWalletAddress(workchain: number, walletType: nt.WalletContractType, publicKey: string): string {
-    return nekoton.computeWalletAddress(workchain, walletType, publicKey);
-  }
-
-  async sendTransfer(
-    walletType: nt.WalletContractType,
-    publicKey: string,
-    recipient: string,
-    gifts: nt.Gift[],
-  ): Promise<nt.Transaction> {
-    let repackedRecipient: string;
-    try {
-      repackedRecipient = nekoton.repackAddress(recipient);
-    } catch (e: any) {
-      throw new Error(e.toString());
-    }
-
-    const signer = await this._context.keystore?.getSigner(publicKey);
-    if (signer == null) {
-      throw new Error('Signer not found for public key');
-    }
-
-    const accountState = await this._context.connectionController.use(async ({ data: { transport } }) =>
-      (await transport.getFullContractState(repackedRecipient))?.boc,
-    );
-    if (accountState == null) {
-      throw new Error('Wallet does not exists');
-    }
-
-    let unsignedMessage: nt.UnsignedMessage | undefined;
-    try {
-      unsignedMessage = nekoton.walletPrepareTransfer(this._context.clock, accountState, walletType, publicKey, gifts, 60);
-    } catch (e: any) {
-      throw new Error(e.toString());
-    }
-
-    if (unsignedMessage === undefined) {
-      throw new Error('Failed to prepare message');
-    }
-
-    let signedMessage: nt.SignedMessage;
-    try {
-      const signature = await signer.sign(unsignedMessage.hash);
-      signedMessage = unsignedMessage.sign(signature);
-    } catch (e: any) {
-      throw new Error(e.toString());
-    } finally {
-      unsignedMessage.free();
-    }
-
-    const transaction = await this._context.subscriptionController.sendMessage(repackedRecipient, signedMessage);
-    if (transaction == null) {
-      throw new Error('Message expired');
-    }
-    return transaction;
   }
 }
 
@@ -761,7 +711,7 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
   const { recipient, stateInit, payload, local } = req.params;
   requireString(req, req.params, 'recipient');
   requireOptionalString(req, req.params, 'stateInit');
-  requireFunctionCall(req, req.params, 'payload');
+  requireOptionalRawFunctionCall(req, req.params, 'payload');
   requireOptionalBoolean(req, req.params, 'local');
 
   let repackedRecipient: string;
@@ -775,15 +725,25 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
 
   const makeSignedMessage = (timeout: number): nt.SignedMessage => {
     try {
-      return nekoton.createExternalMessageWithoutSignature(
-        clock,
-        repackedRecipient,
-        payload.abi,
-        payload.method,
-        stateInit,
-        payload.params,
-        timeout,
-      );
+      if (typeof payload === 'string' || payload == null) {
+        const expireAt = ~~(clock.nowMs / 1000) + timeout;
+        return nekoton.createRawExternalMessage(
+          repackedRecipient,
+          stateInit,
+          payload,
+          expireAt,
+        );
+      } else {
+        return nekoton.createExternalMessageWithoutSignature(
+          clock,
+          repackedRecipient,
+          payload.abi,
+          payload.method,
+          stateInit,
+          payload.params,
+          timeout,
+        );
+      }
     } catch (e: any) {
       throw invalidRequest(req, e.toString());
     }
@@ -792,8 +752,10 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
   const handleTransaction = (transaction: nt.Transaction) => {
     let output: ever.RawTokensObject | undefined;
     try {
-      const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
-      output = decoded?.output;
+      if (typeof payload === 'object' && typeof payload != null) {
+        const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
+        output = decoded?.output;
+      }
     } catch (_) { /* do nothing */
     }
 
@@ -891,44 +853,73 @@ const sendMessage: ProviderHandler<'sendMessage'> = async (ctx, req) => {
   requireBoolean(req, req.params, 'bounce');
   requireOptional(req, req.params, 'payload', requireFunctionCall);
 
-  const { clock, subscriptionController, keystore, accountsStorage } = ctx;
+  const { clock, properties, subscriptionController, connectionController, keystore, accountsStorage } = ctx;
 
   let repackedSender: string;
   let repackedRecipient: string;
+  let account: Account;
   try {
     repackedSender = nekoton.repackAddress(sender);
     repackedRecipient = nekoton.repackAddress(recipient);
-  } catch (e: any) {
-    throw invalidRequest(req, e.toString());
-  }
-
-  let signedMessage: nt.SignedMessage;
-  try {
-    const account = await accountsStorage.getAccount(repackedSender);
-    if (account == null) {
-      throw new Error('Sender not found');
-    }
-
-    signedMessage = await account.prepareMessage({
-      recipient: repackedRecipient,
-      amount,
-      bounce,
-      payload,
-      stateInit: undefined,
-    }, {
-      clock,
-      keystore,
+    account = await accountsStorage.getAccount(repackedSender).then((account) => {
+      if (account != null) {
+        return account;
+      } else {
+        throw new Error('Sender not found');
+      }
     });
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
 
-  const transaction = await subscriptionController.sendMessage(repackedSender, signedMessage);
-  if (transaction == null) {
-    throw invalidRequest(req, 'Message expired');
+  const makeSignedMessage = async (timeout: number): Promise<nt.SignedMessage> => {
+    try {
+      return account.prepareMessage({
+        recipient: repackedRecipient,
+        amount,
+        bounce,
+        payload,
+        stateInit: undefined,
+        timeout,
+      }, {
+        clock,
+        keystore,
+        connectionController,
+        nekoton,
+      });
+    } catch (e: any) {
+      throw invalidRequest(req, e.toString());
+    }
+  };
+
+  // Send and wait with several retries
+  let timeout = properties.message.timeout;
+
+  // Set `retryCount` if not explicitly disabled
+  const retryCount = properties.message.retryTransfers !== false ? properties.message.retryCount : 1;
+
+  for (let retry = 0; retry < retryCount; ++retry) {
+    const signedMessage = await makeSignedMessage(timeout);
+
+    const transaction = await subscriptionController.sendMessage(repackedSender, signedMessage);
+    if (transaction == null) {
+      timeout *= properties.message.timeoutGrowFactor;
+      continue;
+    }
+
+    return { transaction };
   }
 
-  return { transaction };
+  // Execute locally
+  const errorMessage = 'Message expired';
+  const signedMessage = await makeSignedMessage(60);
+  const transaction = await subscriptionController.sendMessageLocally(repackedSender, signedMessage)
+    .catch((e) => {
+      throw invalidRequest(req, `${errorMessage}. ${e.toString()}`);
+    });
+
+  const additionalText = transaction.exitCode != null ? `. Possible exit code: ${transaction.exitCode}` : '';
+  throw invalidRequest(req, `${errorMessage}${additionalText}`);
 };
 
 const sendMessageDelayed: ProviderHandler<'sendMessageDelayed'> = async (ctx, req) => {
@@ -943,7 +934,7 @@ const sendMessageDelayed: ProviderHandler<'sendMessageDelayed'> = async (ctx, re
   requireBoolean(req, req.params, 'bounce');
   requireOptional(req, req.params, 'payload', requireFunctionCall);
 
-  const { clock, subscriptionController, keystore, accountsStorage, notify } = ctx;
+  const { clock, subscriptionController, connectionController, keystore, accountsStorage, notify } = ctx;
 
   let repackedSender: string;
   let repackedRecipient: string;
@@ -967,9 +958,12 @@ const sendMessageDelayed: ProviderHandler<'sendMessageDelayed'> = async (ctx, re
       bounce,
       payload,
       stateInit: undefined,
+      timeout: 60, // TEMP
     }, {
       clock,
       keystore,
+      connectionController,
+      nekoton,
     });
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
@@ -1277,6 +1271,19 @@ function requireFunctionCall<O, P extends keyof O>(req: ever.RawProviderRequest<
   requireString(req, property, 'abi');
   requireString(req, property, 'method');
   requireObject(req, property, 'params');
+}
+
+function requireOptionalRawFunctionCall<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
+  const property = (object[key] as unknown) as null | string | ever.FunctionCall<string>;
+  if (typeof property === 'string' || property == null) {
+    return;
+  } else if (typeof property === 'object') {
+    requireString(req, property, 'abi');
+    requireString(req, property, 'method');
+    requireObject(req, property, 'params');
+  } else {
+    throw invalidRequest(req, `'${String(key)}' must be a function all or optional string`);
+  }
 }
 
 function requireMethodOrArray<O, P extends keyof O>(req: ever.RawProviderRequest<ever.ProviderMethod>, object: O, key: P) {
