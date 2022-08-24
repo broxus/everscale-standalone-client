@@ -47,7 +47,19 @@ export class SimpleKeystore implements Keystore {
     return nekoton.ed25519_generateKeyPair();
   }
 
-  public addKeyPair(id: string, keyPair: nt.Ed25519KeyPair) {
+  public addKeyPair(keyPair: nt.Ed25519KeyPair): void;
+  public addKeyPair(id: string, keyPair: nt.Ed25519KeyPair): void;
+  public addKeyPair(idOrKeypair: string | nt.Ed25519KeyPair, rest?: nt.Ed25519KeyPair) {
+    let id: string;
+    let keyPair: nt.Ed25519KeyPair;
+    if (typeof idOrKeypair == 'string') {
+      id = idOrKeypair;
+      keyPair = rest!;
+    } else {
+      id = idOrKeypair.publicKey;
+      keyPair = idOrKeypair;
+    }
+
     const signer = new SimpleSigner(keyPair);
     this.signers.set(id, signer);
     this.signersByPublicKey.set(keyPair.publicKey, signer);
