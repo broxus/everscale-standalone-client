@@ -35,6 +35,11 @@ export interface Account {
   readonly address: Address;
 
   /**
+   * Fetch contract public key
+   */
+  fetchPublicKey(ctx: FetchPublicKeyContext): Promise<string>;
+
+  /**
    * Prepares and signs an external message to this account
    *
    * @param args
@@ -42,6 +47,24 @@ export interface Account {
    */
   prepareMessage(args: PrepareMessageParams, ctx: PrepareMessageContext): Promise<nt.SignedMessage>;
 }
+
+/**
+ * @category AccountsStorage
+ */
+export type FetchPublicKeyContext = {
+  /**
+   * Provider clock
+   */
+  clock: nt.ClockWithOffset,
+  /**
+   * Connection controller
+   */
+  connectionController: ConnectionController,
+  /**
+   * Initialized instance of nekoton-wasm
+   */
+  nekoton: typeof nt,
+};
 
 /**
  * @category AccountsStorage
@@ -141,26 +164,28 @@ export class SimpleAccountsStorage implements AccountsStorage {
   }
 
   public set defaultAccount(value: Address | string | undefined) {
-    const address = value instanceof Address ? value.toString() : value;
+    const address = value?.toString();
     if (address != null && !this.accounts.has(address)) {
       throw new Error('Account not found in storage');
     }
     this._defaultAccount = (value == null || value instanceof Address) ? value : new Address(value);
   }
 
-  public async getAccount(address: string): Promise<Account | undefined> {
-    return this.accounts.get(address);
+  public async getAccount(address: string | Address): Promise<Account | undefined> {
+    return this.accounts.get(address.toString());
   }
 
-  public addAccount(account: Account) {
-    this.accounts.set(account.address.toString(), account);
+  public addAccount(account: Account): Address {
+    const address = account.address;
+    this.accounts.set(address.toString(), account);
+    return address;
   }
 
-  public hasAccount(address: string): boolean {
-    return this.accounts.has(address);
+  public hasAccount(address: string | Address): boolean {
+    return this.accounts.has(address.toString());
   }
 
-  public removeAccount(address: string) {
-    this.accounts.delete(address);
+  public removeAccount(address: string | Address) {
+    this.accounts.delete(address.toString());
   }
 }

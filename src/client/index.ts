@@ -112,7 +112,7 @@ export const VERSION = '0.2.25';
 /**
  * @category Client
  */
-export const SUPPORTED_PERMISSIONS: ever.Permission[] = ['basic'];
+export const SUPPORTED_PERMISSIONS: ever.Permission[] = ['basic', 'accountInteraction'];
 
 /**
  * @category Client
@@ -121,7 +121,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
   private readonly _context: Context;
   private _handlers: { [K in ever.ProviderMethod]?: ProviderHandler<K> } = {
     requestPermissions,
-    // changeAccount, // not supported
+    changeAccount,
     disconnect,
     subscribe,
     unsubscribe,
@@ -274,6 +274,11 @@ const requestPermissions: ProviderHandler<'requestPermissions'> = async (ctx, re
   for (const permission of permissions) {
     if (permission === 'basic' || (permission as any) === 'tonClient') {
       newPermissions.basic = true;
+    } else if (permission === 'accountInteraction') {
+      if (newPermissions.accountInteraction != null) {
+        continue;
+      }
+      newPermissions.accountInteraction = await makeAccountInteractionPermission(req, ctx);
     } else {
       throw invalidRequest(req, `Permission '${permission}' is not supported by standalone provider`);
     }
@@ -282,10 +287,28 @@ const requestPermissions: ProviderHandler<'requestPermissions'> = async (ctx, re
   ctx.permissions = newPermissions;
 
   // NOTE: be sure to return object copy to prevent adding new permissions
+  const permissionsCopy = JSON.parse(JSON.stringify(newPermissions));
   ctx.notify('permissionsChanged', {
-    permissions: { ...newPermissions },
+    permissions: permissionsCopy,
   });
-  return { ...newPermissions };
+  return permissionsCopy;
+};
+
+const changeAccount: ProviderHandler<'changeAccount'> = async (ctx, req) => {
+  requireAccountsStorage(req, ctx);
+
+  const newPermissions = { ...ctx.permissions };
+
+  newPermissions.accountInteraction = await makeAccountInteractionPermission(req, ctx);
+
+  ctx.permissions = newPermissions;
+
+  // NOTE: be sure to return object copy to prevent adding new permissions
+  const permissionsCopy = JSON.parse(JSON.stringify(newPermissions));
+  ctx.notify('permissionsChanged', {
+    permissions: permissionsCopy,
+  });
+  return permissionsCopy;
 };
 
 const disconnect: ProviderHandler<'disconnect'> = async (ctx, _req) => {
@@ -352,7 +375,7 @@ const getProviderState: ProviderHandler<'getProviderState'> = async (ctx, req) =
     networkId: transport.id,
     selectedConnection: transport.group,
     supportedPermissions: [...SUPPORTED_PERMISSIONS],
-    permissions: { ...ctx.permissions },
+    permissions: JSON.parse(JSON.stringify(ctx.permissions)),
     subscriptions: ctx.subscriptionController.subscriptionStates,
   };
 };
@@ -1291,6 +1314,34 @@ function requireMethodOrArray<O, P extends keyof O>(req: ever.RawProviderRequest
   if (property != null && typeof property !== 'string' && !Array.isArray(property)) {
     throw invalidRequest(req, `'${String(key)}' must be a method name or an array of possible names`);
   }
+}
+
+async function makeAccountInteractionPermission(
+  req: ever.RawProviderRequest<ever.ProviderMethod>,
+  ctx: Context,
+): Promise<ever.Permissions<string>['accountInteraction']> {
+  requireAccountsStorage(req, ctx);
+  const defaultAccount = ctx.accountsStorage.defaultAccount;
+  if (defaultAccount == null) {
+    throw invalidRequest(req, 'Default account not set in accounts storage');
+  }
+
+  const account = await ctx.accountsStorage.getAccount(defaultAccount);
+  if (account == null) {
+    throw invalidRequest(req, 'Default account not found');
+  }
+
+  const publicKey = await account.fetchPublicKey({
+    clock: ctx.clock,
+    connectionController: ctx.connectionController,
+    nekoton,
+  });
+
+  return {
+    address: account.address.toString(),
+    publicKey,
+    contractType: 'unknown' as any,
+  };
 }
 
 const invalidRequest = (req: ever.RawProviderRequest<ever.ProviderMethod>, message: string, data?: unknown) =>

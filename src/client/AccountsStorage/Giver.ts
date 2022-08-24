@@ -1,7 +1,7 @@
 import type * as nt from 'nekoton-wasm';
 import { Address } from 'everscale-inpage-provider';
 
-import { Account, PrepareMessageParams, PrepareMessageContext } from './';
+import { Account, PrepareMessageParams, PrepareMessageContext, FetchPublicKeyContext } from './';
 
 /**
  * Any account which supports Giver ABI (GiverV2, SafeMultisig, SetcodeMultisig, Surf):
@@ -34,6 +34,21 @@ export class GiverAccount implements Account {
   constructor(args: { address: string | Address, publicKey?: string }) {
     this.address = args.address instanceof Address ? args.address : new Address(args.address);
     this.publicKey = args.publicKey;
+  }
+
+  public async fetchPublicKey(ctx: FetchPublicKeyContext): Promise<string> {
+    if (this.publicKey != null) {
+      return this.publicKey;
+    }
+
+    this.publicKey = await ctx.connectionController.use(async ({ data: { transport } }) => {
+      const state = await transport.getFullContractState(this.address.toString());
+      if (state == null || !state.isDeployed) {
+        throw new Error('Contract not deployed');
+      }
+      return ctx.nekoton.extractPublicKey(state.boc);
+    });
+    return this.publicKey;
   }
 
   async prepareMessage(args: PrepareMessageParams, ctx: PrepareMessageContext): Promise<nt.SignedMessage> {
@@ -70,21 +85,6 @@ export class GiverAccount implements Account {
     } finally {
       unsignedMessage.free();
     }
-  }
-
-  private async fetchPublicKey(ctx: PrepareMessageContext): Promise<string> {
-    if (this.publicKey != null) {
-      return this.publicKey;
-    }
-
-    this.publicKey = await ctx.connectionController.use(async ({ data: { transport } }) => {
-      const state = await transport.getFullContractState(this.address.toString());
-      if (state == null || !state.isDeployed) {
-        throw new Error('Contract not deployed');
-      }
-      return ctx.nekoton.extractPublicKey(state.boc);
-    });
-    return this.publicKey;
   }
 }
 

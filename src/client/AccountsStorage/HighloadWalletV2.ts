@@ -3,7 +3,7 @@ import { Address } from 'everscale-inpage-provider';
 import BigNumber from 'bignumber.js';
 
 import core from '../../core';
-import { Account, PrepareMessageParams, PrepareMessageContext } from './';
+import { Account, PrepareMessageParams, PrepareMessageContext, FetchPublicKeyContext } from './';
 
 const { ensureNekotonLoaded, nekoton } = core;
 
@@ -39,6 +39,20 @@ export class HighloadWalletV2 implements Account {
 
   constructor(address: string | Address) {
     this.address = address instanceof Address ? address : new Address(address);
+  }
+
+  async fetchPublicKey(ctx: FetchPublicKeyContext): Promise<string> {
+    let publicKey = this.publicKey;
+    if (publicKey == null) {
+      publicKey = this.publicKey = await ctx.connectionController.use(async ({ data: { transport } }) => {
+        const state = await transport.getFullContractState(this.address.toString());
+        if (state == null || !state.isDeployed) {
+          throw new Error('Contract not deployed and public key was not specified');
+        }
+        return new BigNumber(`0x${ctx.nekoton.extractPublicKey(state.boc)}`);
+      });
+    }
+    return publicKey.toString(16).padStart(64, '0');
   }
 
   async prepareMessage(args: PrepareMessageParams, ctx: PrepareMessageContext): Promise<nt.SignedMessage> {
