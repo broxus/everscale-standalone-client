@@ -1,16 +1,38 @@
 import type * as nt from 'nekoton-wasm';
+import { Address } from 'everscale-inpage-provider';
 
 import { Account, PrepareMessageParams, PrepareMessageContext } from './';
 
 /**
+ * Any account which supports Giver ABI (GiverV2, SafeMultisig, SetcodeMultisig, Surf):
+ *
+ * ```
+ * {
+ *   "ABI version": 2,
+ *   "header": ["pubkey", "time", "expire"],
+ *   "functions": [{
+ *     "name": "sendTransaction",
+ *     "inputs": [
+ *       {"name":"dest","type":"address"},
+ *       {"name":"value","type":"uint128"},
+ *       {"name":"bounce","type":"bool"},
+ *       {"name":"flags","type":"uint8"},
+ *       {"name":"payload","type":"cell"}
+ *     ],
+ *     "outputs": []
+ *   }],
+ *   "events": []
+ * }
+ * ```
+ *
  * @category AccountsStorage
  */
 export class GiverAccount implements Account {
-  public readonly address: string;
+  public readonly address: Address;
   private publicKey?: string;
 
-  constructor(args: { address: string, publicKey?: string }) {
-    this.address = args.address;
+  constructor(args: { address: string | Address, publicKey?: string }) {
+    this.address = args.address instanceof Address ? args.address : new Address(args.address);
     this.publicKey = args.publicKey;
   }
 
@@ -27,7 +49,7 @@ export class GiverAccount implements Account {
 
     const unsignedMessage = ctx.nekoton.createExternalMessage(
       ctx.clock,
-      this.address,
+      this.address.toString(),
       GIVER_ABI,
       'sendTransaction',
       undefined,
@@ -56,7 +78,7 @@ export class GiverAccount implements Account {
     }
 
     this.publicKey = await ctx.connectionController.use(async ({ data: { transport } }) => {
-      const state = await transport.getFullContractState(this.address);
+      const state = await transport.getFullContractState(this.address.toString());
       if (state == null || !state.isDeployed) {
         throw new Error('Contract not deployed');
       }
