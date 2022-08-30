@@ -131,6 +131,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     getAccountsByCodeHash,
     getTransactions,
     getTransaction,
+    findTransaction,
     runLocal,
     getExpectedAddress,
     getBocHash,
@@ -445,6 +446,31 @@ const getTransaction: ProviderHandler<'getTransaction'> = async (ctx, req) => {
     return {
       transaction: await connectionController.use(({ data: { transport } }) =>
         transport.getTransaction(hash)),
+    };
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
+const findTransaction: ProviderHandler<'findTransaction'> = async (ctx, req) => {
+  requireParams(req);
+
+  const { inMessageHash } = req.params;
+  requireOptional(req, req.params, 'inMessageHash', requireString);
+
+  const { connectionController } = ctx;
+
+  // TODO: add more filters
+  if (inMessageHash == null) {
+    return {
+      transaction: undefined,
+    };
+  }
+
+  try {
+    return {
+      transaction: await connectionController.use(({ data: { transport } }) =>
+        transport.getDstTransaction(inMessageHash)),
     };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
