@@ -3,7 +3,7 @@ import { Address } from 'everscale-inpage-provider';
 import BigNumber from 'bignumber.js';
 
 import core from '../../core';
-import { Account, PrepareMessageParams, PrepareMessageContext, FetchPublicKeyContext } from './';
+import { Account, PrepareMessageParams, AccountsStorageContext } from './';
 
 const { ensureNekotonLoaded, nekoton } = core;
 
@@ -38,41 +38,32 @@ export class WalletV3Account implements Account {
     this.address = address;
   }
 
-  async fetchPublicKey(ctx: FetchPublicKeyContext): Promise<string> {
+  async fetchPublicKey(ctx: AccountsStorageContext): Promise<string> {
     let publicKey = this.publicKey;
     if (publicKey == null) {
-      publicKey = this.publicKey = await ctx.connectionController.use(async ({ data: { transport } }) => {
-        const state = await transport.getFullContractState(this.address.toString());
-        if (state == null || !state.isDeployed) {
-          throw new Error('Contract not deployed and public key was not specified');
-        }
-        return new BigNumber(`0x${ctx.nekoton.extractPublicKey(state.boc)}`);
-      });
+      publicKey = this.publicKey = await ctx.fetchPublicKey(this.address)
+        .then(publicKey => new BigNumber(`0x${publicKey}`));
     }
     return publicKey.toString(16).padStart(64, '0');
   }
 
-  async prepareMessage(args: PrepareMessageParams, ctx: PrepareMessageContext): Promise<nt.SignedMessage> {
+  async prepareMessage(args: PrepareMessageParams, ctx: AccountsStorageContext): Promise<nt.SignedMessage> {
     const { seqno, publicKey, stateInit } = await this.fetchState(ctx);
-    const signer = await ctx.keystore.getSigner(publicKey);
-    if (signer == null) {
-      throw new Error('Signer not found');
-    }
+    const signer = await ctx.getSigner(publicKey);
 
-    const expireAt = ~~(ctx.clock.nowMs / 1000) + args.timeout;
+    const expireAt = ctx.nowSec + args.timeout;
 
     const attachedPayload = args.payload
-      ? ctx.nekoton.encodeInternalInput(args.payload.abi, args.payload.method, args.payload.params)
+      ? ctx.encodeInternalInput(args.payload)
       : undefined;
 
-    const internalMessage = ctx.nekoton.encodeInternalMessage(
-      undefined,
-      args.recipient,
-      args.bounce,
-      args.stateInit,
-      attachedPayload,
-      args.amount,
-    );
+    const internalMessage = ctx.encodeInternalMessage({
+      dst: args.recipient,
+      bounce: args.bounce,
+      stateInit: args.stateInit,
+      body: attachedPayload,
+      amount: args.amount,
+    });
 
     const params: nt.TokensObject = {
       walletId: WALLET_ID,
@@ -82,52 +73,49 @@ export class WalletV3Account implements Account {
       message: internalMessage,
     };
 
-    const unsignedPayload = ctx.nekoton.packIntoCell(
-      UNSIGNED_TRANSFER_STRUCTURE,
-      params,
-    );
-    const hash = ctx.nekoton.getBocHash(unsignedPayload);
+    const unsignedPayload = ctx.packIntoCell({ structure: UNSIGNED_TRANSFER_STRUCTURE, data: params });
+    const hash = ctx.getBocHash(unsignedPayload);
     const signature = await signer.sign(hash);
-    const { signatureParts } = ctx.nekoton.extendSignature(signature);
+    const { signatureParts } = ctx.extendSignature(signature);
 
     params.signatureHigh = signatureParts.high;
     params.signatureLow = signatureParts.low;
-    const signedPayload = ctx.nekoton.packIntoCell(
-      SIGNED_TRANSFER_STRUCTURE,
-      params,
-    );
+    const signedPayload = ctx.packIntoCell({
+      structure: SIGNED_TRANSFER_STRUCTURE,
+      data: params,
+    });
 
-    return ctx.nekoton.createRawExternalMessage(
-      this.address.toString(),
+    return ctx.createRawExternalMessage({
+      address: this.address,
+      body: signedPayload,
       stateInit,
-      signedPayload,
       expireAt,
-    );
+    });
   }
 
-  private async fetchState(ctx: PrepareMessageContext): Promise<{
+  private async fetchState(ctx: AccountsStorageContext): Promise<{
     seqno: number,
     publicKey: string,
     stateInit?: string,
   }> {
     let stateInit: string | undefined = undefined;
-    const result = await ctx.connectionController.use(async ({ data: { transport } }) => {
-      const state = await transport.getFullContractState(this.address.toString());
-      if (state == null || !state.isDeployed) {
-        if (this.publicKey == null) {
-          throw new Error('Contract not deployed and public key was not specified');
-        }
+    let result: { seqno: number, publicKey: BigNumber };
 
-        stateInit = makeStateInit(this.publicKey);
-        return { seqno: 0, publicKey: this.publicKey };
-      } else {
-        const data = ctx.nekoton.extractContractData(state.boc);
-        if (data == null) {
-          throw new Error('Failed to extract contract data');
-        }
-        return parseInitData(data);
+    const state = await ctx.getFullContractState(this.address);
+    if (state == null || !state.isDeployed) {
+      if (this.publicKey == null) {
+        throw new Error('Contract not deployed and public key was not specified');
       }
-    });
+
+      stateInit = makeStateInit(this.publicKey);
+      result = { seqno: 0, publicKey: this.publicKey };
+    } else {
+      const data = ctx.extractContractData(state.boc);
+      if (data == null) {
+        throw new Error('Failed to extract contract data');
+      }
+      result = parseInitData(ctx, data);
+    }
 
     if (this.publicKey == null) {
       this.publicKey = result.publicKey;
@@ -143,8 +131,12 @@ export class WalletV3Account implements Account {
   }
 }
 
-const parseInitData = (cell: string): { seqno: number, publicKey: BigNumber } => {
-  const parsed = nekoton.unpackFromCell(DATA_STRUCTURE, cell, false);
+const parseInitData = (ctx: AccountsStorageContext, boc: string): { seqno: number, publicKey: BigNumber } => {
+  const parsed = ctx.unpackFromCell({
+    structure: DATA_STRUCTURE,
+    boc,
+    allowPartial: false,
+  });
   if (typeof parsed !== 'object' || typeof parsed['seqno'] !== 'string' || typeof parsed['publicKey'] !== 'string') {
     throw new Error('Invalid contract data ');
   }
