@@ -188,7 +188,7 @@ export class AccountsStorageContext {
     const unsignedMessage = this.nekoton.createExternalMessage(
       this.clock,
       args.address.toString(),
-      JSON.stringify(args.abi),
+      args.abi,
       args.method,
       args.stateInit,
       args.params,
