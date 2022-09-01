@@ -1,11 +1,12 @@
 import type * as ever from 'everscale-inpage-provider';
-import { Address } from 'everscale-inpage-provider';
+import { AbiVersion, Address } from 'everscale-inpage-provider';
 import type * as nt from 'nekoton-wasm';
 
-import { Keystore } from '../keystore';
+import { Keystore, Signer } from '../keystore';
 import { ConnectionController } from '../ConnectionController';
 
 export { GiverAccount } from './Giver';
+export { GenericAccount, MsigAccount } from './Generic';
 export { WalletV3Account } from './WalletV3';
 export { HighloadWalletV2 } from './HighloadWalletV2';
 
@@ -37,7 +38,7 @@ export interface Account {
   /**
    * Fetch contract public key
    */
-  fetchPublicKey(ctx: FetchPublicKeyContext): Promise<string>;
+  fetchPublicKey(ctx: AccountsStorageContext): Promise<string>;
 
   /**
    * Prepares and signs an external message to this account
@@ -45,26 +46,8 @@ export interface Account {
    * @param args
    * @param ctx
    */
-  prepareMessage(args: PrepareMessageParams, ctx: PrepareMessageContext): Promise<nt.SignedMessage>;
+  prepareMessage(args: PrepareMessageParams, ctx: AccountsStorageContext): Promise<nt.SignedMessage>;
 }
-
-/**
- * @category AccountsStorage
- */
-export type FetchPublicKeyContext = {
-  /**
-   * Provider clock
-   */
-  clock: nt.ClockWithOffset,
-  /**
-   * Connection controller
-   */
-  connectionController: ConnectionController,
-  /**
-   * Initialized instance of nekoton-wasm
-   */
-  nekoton: typeof nt,
-};
 
 /**
  * @category AccountsStorage
@@ -101,23 +84,139 @@ export type PrepareMessageParams = {
 /**
  * @category AccountsStorage
  */
-export type PrepareMessageContext = {
-  /**
-   * Provider clock
-   */
-  clock: nt.ClockWithOffset,
-  /**
-   * Provider keystore
-   */
-  keystore: Keystore,
-  /**
-   * Connection controller
-   */
-  connectionController: ConnectionController,
-  /**
-   * Initialized instance of nekoton-wasm
-   */
-  nekoton: typeof nt,
+export class AccountsStorageContext {
+  constructor(
+    private readonly clock: nt.ClockWithOffset,
+    private readonly connectionController: ConnectionController,
+    private readonly nekoton: typeof nt,
+    private readonly keystore?: Keystore,
+  ) {
+  }
+
+  public async getSigner(publicKey: string): Promise<Signer> {
+    if (this.keystore == null) {
+      throw new Error('Keystore not found');
+    }
+    const signer = await this.keystore.getSigner(publicKey);
+    if (signer == null) {
+      throw new Error('Signer not found');
+    }
+    return signer;
+  }
+
+  public get nowMs(): number {
+    return this.clock.nowMs;
+  }
+
+  public get nowSec(): number {
+    return ~~(this.clock.nowMs / 1000);
+  }
+
+  public async fetchPublicKey(address: string | Address): Promise<string> {
+    const state = await this.getFullContractState(address);
+    if (state == null || !state.isDeployed) {
+      throw new Error('Contract not deployed');
+    }
+    return this.nekoton.extractPublicKey(state.boc);
+  }
+
+  public async getFullContractState(address: string | Address): Promise<nt.FullContractState | undefined> {
+    return this.connectionController.use(async ({ data: { transport } }) =>
+      transport.getFullContractState(address.toString()));
+  }
+
+  public extractContractData(boc: string): string | undefined {
+    return this.nekoton.extractContractData(boc);
+  }
+
+  public packIntoCell(args: {
+    structure: nt.AbiParam[],
+    data: nt.TokensObject,
+    abiVersion?: AbiVersion
+  }): string {
+    return this.nekoton.packIntoCell(args.structure, args.data, args.abiVersion);
+  }
+
+  public unpackFromCell(args: {
+    structure: nt.AbiParam[],
+    boc: string,
+    allowPartial: boolean,
+    abiVersion?: AbiVersion
+  }): nt.TokensObject {
+    return this.nekoton.unpackFromCell(args.structure, args.boc, args.allowPartial, args.abiVersion);
+  }
+
+  public getBocHash(boc: string): string {
+    return this.nekoton.getBocHash(boc);
+  }
+
+  public extendSignature(signature: string): nt.ExtendedSignature {
+    return this.nekoton.extendSignature(signature);
+  }
+
+  public encodeInternalInput(args: ever.FunctionCall<string>): string {
+    return this.nekoton.encodeInternalInput(args.abi, args.method, args.params);
+  }
+
+  public encodeInternalMessage(args: {
+    src?: string,
+    dst: string,
+    bounce: boolean,
+    stateInit?: string,
+    body?: string,
+    amount: string,
+  }): string {
+    return this.nekoton.encodeInternalMessage(
+      args.src,
+      args.dst,
+      args.bounce,
+      args.stateInit,
+      args.body,
+      args.amount,
+    );
+  }
+
+  public async createExternalMessage(args: {
+    address: string | Address,
+    signer: Signer,
+    timeout: number,
+    abi: string,
+    method: string,
+    params: nt.TokensObject,
+    stateInit?: string,
+  }): Promise<nt.SignedMessage> {
+    const unsignedMessage = this.nekoton.createExternalMessage(
+      this.clock,
+      args.address.toString(),
+      args.abi,
+      args.method,
+      args.stateInit,
+      args.params,
+      args.signer.publicKey,
+      args.timeout,
+    );
+
+    try {
+      const signature = await args.signer.sign(unsignedMessage.hash);
+      return unsignedMessage.sign(signature);
+    } finally {
+      unsignedMessage.free();
+    }
+  }
+
+  public createRawExternalMessage(args: {
+    address: string | Address,
+    body?: string,
+    stateInit?: string,
+    expireAt: number
+  }): nt.SignedMessage {
+    return this.nekoton.createRawExternalMessage(
+      args.address.toString(),
+      args.stateInit,
+      args.body,
+      args.expireAt,
+    );
+  }
 }
 
 /**

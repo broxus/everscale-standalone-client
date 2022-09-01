@@ -11,7 +11,7 @@ import {
   ConnectionController,
 } from './ConnectionController';
 import { SubscriptionController } from './SubscriptionController';
-import { Account, AccountsStorage } from './AccountsStorage';
+import { Account, AccountsStorage, AccountsStorageContext } from './AccountsStorage';
 import { Keystore } from './keystore';
 import { Clock } from './clock';
 
@@ -548,11 +548,12 @@ const getBocHash: ProviderHandler<'getBocHash'> = async (_ctx, req) => {
 const packIntoCell: ProviderHandler<'packIntoCell'> = async (_ctx, req) => {
   requireParams(req);
 
-  const { structure, data } = req.params;
+  const { structure, data, abiVersion } = req.params;
   requireArray(req, req.params, 'structure');
+  requireOptional(req, req.params, 'abiVersion', requireString);
 
   try {
-    return { boc: nekoton.packIntoCell(structure as nt.AbiParam[], data) };
+    return { boc: nekoton.packIntoCell(structure as nt.AbiParam[], data, abiVersion) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -561,13 +562,14 @@ const packIntoCell: ProviderHandler<'packIntoCell'> = async (_ctx, req) => {
 const unpackFromCell: ProviderHandler<'unpackFromCell'> = async (_ctx, req) => {
   requireParams(req);
 
-  const { structure, boc, allowPartial } = req.params;
+  const { structure, boc, allowPartial, abiVersion } = req.params;
   requireArray(req, req.params, 'structure');
   requireString(req, req.params, 'boc');
   requireBoolean(req, req.params, 'allowPartial');
+  requireOptional(req, req.params, 'abiVersion', requireString);
 
   try {
-    return { data: nekoton.unpackFromCell(structure as nt.AbiParam[], boc, allowPartial) };
+    return { data: nekoton.unpackFromCell(structure as nt.AbiParam[], boc, allowPartial, abiVersion) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -930,12 +932,12 @@ const sendMessage: ProviderHandler<'sendMessage'> = async (ctx, req) => {
         payload,
         stateInit: undefined,
         timeout,
-      }, {
+      }, new AccountsStorageContext(
         clock,
-        keystore,
         connectionController,
         nekoton,
-      });
+        keystore,
+      ));
     } catch (e: any) {
       throw invalidRequest(req, e.toString());
     }
@@ -1008,12 +1010,12 @@ const sendMessageDelayed: ProviderHandler<'sendMessageDelayed'> = async (ctx, re
       payload,
       stateInit: undefined,
       timeout: 60, // TEMP
-    }, {
+    }, new AccountsStorageContext(
       clock,
-      keystore,
       connectionController,
       nekoton,
-    });
+      keystore,
+    ));
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -1357,11 +1359,11 @@ async function makeAccountInteractionPermission(
     throw invalidRequest(req, 'Default account not found');
   }
 
-  const publicKey = await account.fetchPublicKey({
-    clock: ctx.clock,
-    connectionController: ctx.connectionController,
+  const publicKey = await account.fetchPublicKey(new AccountsStorageContext(
+    ctx.clock,
+    ctx.connectionController,
     nekoton,
-  });
+  ));
 
   return {
     address: account.address.toString(),
