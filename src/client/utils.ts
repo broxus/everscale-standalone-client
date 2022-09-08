@@ -98,3 +98,12 @@ export const convertVersionToInt32 = (version: string): number => {
   }
   return numericVersion;
 };
+
+const MAX = 4294967295;
+
+let idCounter = Math.floor(Math.random() * MAX);
+
+export function getUniqueId(): number {
+  idCounter = (idCounter + 1) % MAX;
+  return idCounter;
+}

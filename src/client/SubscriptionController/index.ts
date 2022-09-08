@@ -2,6 +2,7 @@ import { Mutex } from '@broxus/await-semaphore';
 import type * as ever from 'everscale-inpage-provider';
 import type * as nt from 'nekoton-wasm';
 
+import { getUniqueId } from '../utils';
 import { ConnectionController } from '../ConnectionController';
 import { ContractSubscription, IContractHandler } from './subscription';
 
@@ -14,7 +15,7 @@ export class SubscriptionController {
   private readonly _subscriptions: Map<string, ContractSubscription> = new Map();
   private readonly _subscriptionsMutex: Mutex = new Mutex();
   private readonly _sendMessageRequests: Map<string, Map<string, SendMessageCallback>> = new Map();
-  private readonly _subscriptionStates: Map<string, ever.ContractUpdatesSubscription> = new Map();
+  private readonly _subscriptionStates: Map<string, SubscriptionState> = new Map();
 
   constructor(
     connectionController: ConnectionController,
@@ -28,14 +29,19 @@ export class SubscriptionController {
     address: string,
     signedMessage: nt.SignedMessage,
   ): Promise<nt.Transaction> {
-    await this.subscribeToContract(address, { state: true });
-    const subscription = this._subscriptions.get(address);
-    if (subscription == null) {
-      throw new Error('Failed to subscribe to contract');
-    }
+    const subscriptionId = getUniqueId();
+    try {
+      await this.subscribeToContract(address, { state: true }, subscriptionId);
+      const subscription = this._subscriptions.get(address);
+      if (subscription == null) {
+        throw new Error('Failed to subscribe to contract');
+      }
 
-    return await subscription.use((contract) =>
-      contract.sendMessageLocally(signedMessage));
+      return await subscription.use((contract) =>
+        contract.sendMessageLocally(signedMessage));
+    } finally {
+      this.unsubscribeFromContract(address, subscriptionId).catch(console.error);
+    }
   }
 
   public sendMessage(address: string, signedMessage: nt.SignedMessage): Promise<nt.Transaction | undefined> {
@@ -45,11 +51,12 @@ export class SubscriptionController {
       this._sendMessageRequests.set(address, messageRequests);
     }
 
+    const subscriptionId = getUniqueId();
     return new Promise<nt.Transaction | undefined>((resolve, reject) => {
       const id = signedMessage.hash;
       messageRequests!.set(id, { resolve, reject });
 
-      this.subscribeToContract(address, { state: true })
+      this.subscribeToContract(address, { state: true }, subscriptionId)
         .then(async () => {
           const subscription = this._subscriptions.get(address);
           if (subscription == null) {
@@ -63,73 +70,120 @@ export class SubscriptionController {
               subscription.skipRefreshTimer();
             });
         })
-        .catch((e: any) => this._rejectMessageRequest(address, id, e));
+        .catch((e: any) => this._rejectMessageRequest(address, id, e))
+        .finally(() => {
+          this.unsubscribeFromContract(address, subscriptionId).catch(console.error);
+        });
     });
   }
 
   public async subscribeToContract(
     address: string,
     params: Partial<ever.ContractUpdatesSubscription>,
+    internalId?: number,
   ): Promise<ever.ContractUpdatesSubscription> {
     return this._subscriptionsMutex.use(async () => {
-      let shouldUnsubscribe = true;
+      let mergeInputParams = (currentParams: ever.ContractUpdatesSubscription): ever.ContractUpdatesSubscription => {
+        const newParams = { ...currentParams };
+        Object.keys(newParams).map((param) => {
+          if (param !== 'state' && param !== 'transactions') {
+            throw new Error(`Unknown subscription topic: ${param}`);
+          }
 
-      const currentParams = this._subscriptionStates.get(address) || makeDefaultSubscriptionState();
-      Object.keys(currentParams).map((param) => {
-        if (param !== 'state' && param !== 'transactions') {
-          throw new Error(`Unknown subscription topic: ${param}`);
-        }
+          const value = params[param];
+          if (typeof value === 'boolean') {
+            newParams[param] = value;
+          } else if (value == null) {
+            return;
+          } else {
+            throw new Error(`Unknown subscription topic value ${param}: ${value}`);
+          }
+        });
+        return newParams;
+      };
 
-        const value = params[param];
-        if (typeof value === 'boolean') {
-          currentParams[param] = value;
-        } else if (value == null) {
-          return;
+      const subscriptionState = this._subscriptionStates.get(address) || makeDefaultSubscriptionState();
+      let changedParams: ever.ContractUpdatesSubscription;
+      if (internalId == null) {
+        // Client subscription without id
+        // Changed params are `SubscriptionState.client`
+        changedParams = mergeInputParams(subscriptionState.client);
+      } else {
+        // Internal subscription with id
+        // Changed params are `SubscriptionState.internal[internalId]`
+        let exisingParams = subscriptionState.internal.get(internalId);
+        if (exisingParams != null) {
+          // Updating existing internal params
+          changedParams = mergeInputParams(exisingParams);
+
+          // Remove entry if it is empty
+          if (isEmptySubscription(changedParams)) {
+            subscriptionState.internal.delete(internalId);
+          }
         } else {
-          throw new Error(`Unknown subscription topic value ${param}: ${value}`);
+          // Merge input params with empty struct
+          changedParams = mergeInputParams({ state: false, transactions: false });
         }
-
-        shouldUnsubscribe &&= !currentParams[param];
-      });
-
-      if (shouldUnsubscribe) {
-        this._subscriptionStates.delete(address);
-        await this._tryUnsubscribe(address);
-        return { ...currentParams };
       }
 
+      // Merge changed params with the rest of internal params
+      let computedParams = { ...changedParams };
+      for (const params of subscriptionState.internal.values()) {
+        computedParams.state ||= params.state;
+        computedParams.transactions ||= params.transactions;
+      }
+
+      // Remove subscription if all params are empty
+      if (isEmptySubscription(computedParams)) {
+        this._subscriptionStates.delete(address);
+        await this._tryUnsubscribe(address);
+        return { ...computedParams };
+      }
+
+      // Create subscription if it doesn't exist
       let existingSubscription = this._subscriptions.get(address);
       const isNewSubscription = existingSubscription == null;
       if (existingSubscription == null) {
         existingSubscription = await this._createSubscription(address);
       }
 
-      this._subscriptionStates.set(address, currentParams);
+      // Update subscription state
+      if (internalId == null) {
+        // Update client params
+        subscriptionState.client = changedParams;
+      } else {
+        // Set new internal params
+        subscriptionState.internal.set(internalId, changedParams);
+      }
+      this._subscriptionStates.set(address, subscriptionState);
 
+      // Start subscription
       if (isNewSubscription) {
         await existingSubscription.start();
       }
-      return { ...currentParams };
+
+      // Returns only changed params
+      return { ...changedParams };
     });
   }
 
-  public async unsubscribeFromContract(address: string) {
+  public async unsubscribeFromContract(address: string, internalId?: number) {
     await this.subscribeToContract(address, {
       state: false,
       transactions: false,
-    });
+    }, internalId);
   }
 
-  public async unsubscribeFromAllContracts() {
+  public async unsubscribeFromAllContracts(internalId?: number) {
     for (const address of this._subscriptions.keys()) {
-      await this.unsubscribeFromContract(address);
+      await this.unsubscribeFromContract(address, internalId);
     }
   }
 
   public get subscriptionStates(): { [address: string]: ever.ContractUpdatesSubscription } {
     const result: { [address: string]: ever.ContractUpdatesSubscription } = {};
     for (const [key, value] of this._subscriptionStates.entries()) {
-      result[key] = value;
+      result[key] = { ...value.client };
     }
     return result;
   }
@@ -211,7 +265,7 @@ export class SubscriptionController {
 
   private _notifyStateChanged(address: string, state: nt.ContractState) {
     const subscriptionState = this._subscriptionStates.get(address);
-    if (subscriptionState?.state) {
+    if (subscriptionState?.client.state) {
       this._notify('contractStateChanged', {
         address,
         state,
@@ -221,7 +275,7 @@ export class SubscriptionController {
 
   private _notifyTransactionsFound(address: string, transactions: nt.Transaction[], info: nt.TransactionsBatchInfo) {
     const subscriptionState = this._subscriptionStates.get(address);
-    if (subscriptionState?.transactions) {
+    if (subscriptionState?.client.transactions) {
       this._notify('transactionsFound', {
         address,
         transactions,
@@ -252,10 +306,21 @@ export class SubscriptionController {
   }
 }
 
-const makeDefaultSubscriptionState = (): ever.ContractUpdatesSubscription => ({
-  state: false,
-  transactions: false,
+type SubscriptionState = {
+  internal: Map<number, ever.ContractUpdatesSubscription>,
+  client: ever.ContractUpdatesSubscription,
+};
+
+const makeDefaultSubscriptionState = (): SubscriptionState => ({
+  internal: new Map(),
+  client: {
+    state: false,
+    transactions: false,
+  },
 });
+
+const isEmptySubscription = (params: ever.ContractUpdatesSubscription) =>
+  !params.state && !params.transactions;
 
 export type SendMessageCallback = {
   resolve: (transaction?: nt.Transaction) => void;

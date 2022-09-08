@@ -4,12 +4,7 @@ import type * as nt from 'nekoton-wasm';
 
 import core from '../core';
 import { convertVersionToInt32, SafeEventEmitter } from './utils';
-import {
-  DEFAULT_NETWORK_GROUP,
-  createConnectionController,
-  ConnectionProperties,
-  ConnectionController,
-} from './ConnectionController';
+import { ConnectionController, ConnectionProperties, createConnectionController, DEFAULT_NETWORK_GROUP } from './ConnectionController';
 import { SubscriptionController } from './SubscriptionController';
 import { Account, AccountsStorage, AccountsStorageContext } from './AccountsStorage';
 import { Keystore } from './keystore';
