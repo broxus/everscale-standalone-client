@@ -2,7 +2,7 @@ import type * as nt from 'nekoton-wasm';
 
 import core from '../../core';
 
-const { nekoton, fetch, debugLog } = core;
+const { nekoton, fetch, fetchAgent, debugLog } = core;
 
 /**
  * @category Client
@@ -34,10 +34,10 @@ export class GqlSocket {
     class GqlSender implements nt.IGqlSender {
       private readonly params: GqlSocketParams;
       private readonly latencyDetectionInterval: number;
-      private readonly endpoints: string[];
+      private readonly endpoints: Endpoint[];
       private nextLatencyDetectionTime = 0;
-      private currentEndpoint?: string;
-      private resolutionPromise?: Promise<string>;
+      private currentEndpoint?: Endpoint;
+      private resolutionPromise?: Promise<Endpoint>;
 
       constructor(params: GqlSocketParams) {
         this.params = params;
@@ -53,11 +53,11 @@ export class GqlSocket {
         return this.params.local;
       }
 
-      send(data: string, handler: nt.GqlQuery) {
+      send(data: string, handler: nt.GqlQuery, _longQuery: boolean) {
         ;(async () => {
           const now = Date.now();
           try {
-            let endpoint: string;
+            let endpoint: Endpoint;
             if (this.currentEndpoint != null && now < this.nextLatencyDetectionTime) {
               // Default route
               endpoint = this.currentEndpoint;
@@ -79,13 +79,12 @@ export class GqlSocket {
               delete this.resolutionPromise;
             }
 
-            const response = await fetch(endpoint, {
+            const response = await fetch(endpoint.url, {
               method: 'post',
-              headers: {
-                'Content-Type': 'application/json',
-              },
+              headers: DEFAULT_HEADERS,
               body: data,
-            }).then((response) => response.text());
+              agent: endpoint.agent,
+            } as RequestInit).then((response) => response.text());
             handler.onReceive(response);
           } catch (e: any) {
             handler.onError(e);
@@ -93,21 +92,21 @@ export class GqlSocket {
         })();
       }
 
-      private async _selectQueryingEndpoint(): Promise<string> {
+      private async _selectQueryingEndpoint(): Promise<Endpoint> {
         const maxLatency = this.params.maxLatency || 60000;
         const endpointCount = this.endpoints.length;
 
         for (let retryCount = 0; retryCount < 5; ++retryCount) {
-          let handlers: { resolve: (endpoint: string) => void; reject: () => void };
-          const promise = new Promise<string>((resolve, reject) => {
+          let handlers: { resolve: (endpoint: Endpoint) => void; reject: () => void };
+          const promise = new Promise<Endpoint>((resolve, reject) => {
             handlers = {
-              resolve: (endpoint: string) => resolve(endpoint),
+              resolve: (endpoint: Endpoint) => resolve(endpoint),
               reject: () => reject(undefined),
             };
           });
 
           let checkedEndpoints = 0;
-          let lastLatency: { endpoint: string; latency: number | undefined } | undefined;
+          let lastLatency: { endpoint: Endpoint; latency: number | undefined } | undefined;
 
           for (const endpoint of this.endpoints) {
             GqlSocket.checkLatency(endpoint).then((latency) => {
@@ -154,10 +153,11 @@ export class GqlSocket {
     return new nekoton.GqlConnection(clock, new GqlSender(params));
   }
 
-  static async checkLatency(endpoint: string): Promise<number | undefined> {
-    const response = await fetch(`${endpoint}?query=%7Binfo%7Bversion%20time%20latency%7D%7D`, {
+  static async checkLatency(endpoint: Endpoint): Promise<number | undefined> {
+    const response = await fetch(`${endpoint.url}?query=%7Binfo%7Bversion%20time%20latency%7D%7D`, {
       method: 'get',
-    })
+      agent: endpoint.agent,
+    } as RequestInit)
       .then((response) => response.json())
       .catch((e: any) => {
         debugLog(e);
@@ -185,16 +185,31 @@ export class GqlSocket {
     return latency;
   }
 
-  static expandAddress = (baseUrl: string): string => {
+  static expandAddress = (baseUrl: string): Endpoint => {
     const lastBackslashIndex = baseUrl.lastIndexOf('/');
     baseUrl = lastBackslashIndex < 0 ? baseUrl : baseUrl.substring(0, lastBackslashIndex);
 
+    let url: string;
     if (baseUrl.startsWith('http://') || baseUrl.startsWith('https://')) {
-      return `${baseUrl}/graphql`;
+      url = `${baseUrl}/graphql`;
     } else if (['localhost', '127.0.0.1'].indexOf(baseUrl) >= 0) {
-      return `http://${baseUrl}/graphql`;
+      url = `http://${baseUrl}/graphql`;
     } else {
-      return `https://${baseUrl}/graphql`;
+      url = `https://${baseUrl}/graphql`;
     }
+
+    return {
+      url,
+      agent: fetchAgent(url),
+    };
   };
 }
+
+type Endpoint = {
+  url: string,
+  agent?: any,
+}
+
+const DEFAULT_HEADERS = {
+  'Content-Type': 'application/json',
+};
