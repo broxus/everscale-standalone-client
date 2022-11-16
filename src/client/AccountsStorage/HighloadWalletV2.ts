@@ -14,22 +14,17 @@ export class HighloadWalletV2 implements Account {
   public readonly address: Address;
   private publicKey?: BigNumber;
 
-  public static async computeAddress(args: {
-    publicKey: string | BigNumber,
-    workchain?: number
-  }): Promise<Address> {
+  public static async computeAddress(args: { publicKey: string | BigNumber; workchain?: number }): Promise<Address> {
     // TODO: Somehow propagate init params
     await ensureNekotonLoaded();
 
-    const publicKey = args.publicKey instanceof BigNumber
-      ? args.publicKey
-      : new BigNumber(`0x${args.publicKey}`);
+    const publicKey = args.publicKey instanceof BigNumber ? args.publicKey : new BigNumber(`0x${args.publicKey}`);
     const tvc = makeStateInit(publicKey);
     const hash = nekoton.getBocHash(tvc);
     return new Address(`${args.workchain != null ? args.workchain : 0}:${hash}`);
   }
 
-  public static async fromPubkey(args: { publicKey: string, workchain?: number }): Promise<HighloadWalletV2> {
+  public static async fromPubkey(args: { publicKey: string; workchain?: number }): Promise<HighloadWalletV2> {
     const publicKey = new BigNumber(`0x${args.publicKey}`);
     const address = await HighloadWalletV2.computeAddress({ publicKey, workchain: args.workchain });
     const result = new HighloadWalletV2(address);
@@ -44,7 +39,8 @@ export class HighloadWalletV2 implements Account {
   async fetchPublicKey(ctx: AccountsStorageContext): Promise<string> {
     let publicKey = this.publicKey;
     if (publicKey == null) {
-      publicKey = this.publicKey = await ctx.fetchPublicKey(this.address)
+      publicKey = this.publicKey = await ctx
+        .fetchPublicKey(this.address)
         .then(publicKey => new BigNumber(`0x${publicKey}`));
     }
     return publicKey.toString(16).padStart(64, '0');
@@ -56,9 +52,7 @@ export class HighloadWalletV2 implements Account {
 
     const expireAt = ctx.nowSec + args.timeout;
 
-    const attachedPayload = args.payload
-      ? ctx.encodeInternalInput(args.payload)
-      : undefined;
+    const attachedPayload = args.payload ? ctx.encodeInternalInput(args.payload) : undefined;
 
     const internalMessage = ctx.encodeInternalMessage({
       dst: args.recipient,
@@ -69,10 +63,15 @@ export class HighloadWalletV2 implements Account {
     });
 
     const params: nt.TokensObject = {
-      messages: [[0, {
-        flags: 3,
-        message: internalMessage,
-      }]],
+      messages: [
+        [
+          0,
+          {
+            flags: 3,
+            message: internalMessage,
+          },
+        ],
+      ],
     };
 
     const messages = ctx.packIntoCell({ structure: MESSAGES_STRUCTURE, data: params });
@@ -100,8 +99,8 @@ export class HighloadWalletV2 implements Account {
   }
 
   private async fetchState(ctx: AccountsStorageContext): Promise<{
-    publicKey: string,
-    stateInit?: string,
+    publicKey: string;
+    stateInit?: string;
   }> {
     let stateInit: string | undefined = undefined;
     let publicKey: BigNumber;
@@ -185,6 +184,7 @@ const DATA_STRUCTURE: nt.AbiParam[] = [
   { name: 'queries', type: 'bool' },
 ];
 
-const HIGHLOAD_WALLET_V2_CODE = 'te6ccgEBCQEA5QABFP8A9KQT9LzyyAsBAgEgBAIB6vKDCNcYINMf0z/4I6ofUyC58mPtRNDTH9M/0//0BNFTYIBA9A5voTHyYFFzuvKiB/kBVBCH+RDyowL0BNH4AH+OFiGAEPR4b6UgmALTB9QwAfsAkTLiAbPmW4MlochANIBA9EOK5jHIEssfE8s/y//0AMntVAMANCCAQPSWb6UyURCUMFMDud4gkzM2AZIyMOKzAgFICAUCASAHBgBBvl+XaiaGmPmOmf6f+Y+gJoqRBAIHoHN9CYyS2/yV3R8UABe9nOdqJoaa+Y64X/wABNAw';
+const HIGHLOAD_WALLET_V2_CODE =
+  'te6ccgEBCQEA5QABFP8A9KQT9LzyyAsBAgEgBAIB6vKDCNcYINMf0z/4I6ofUyC58mPtRNDTH9M/0//0BNFTYIBA9A5voTHyYFFzuvKiB/kBVBCH+RDyowL0BNH4AH+OFiGAEPR4b6UgmALTB9QwAfsAkTLiAbPmW4MlochANIBA9EOK5jHIEssfE8s/y//0AMntVAMANCCAQPSWb6UyURCUMFMDud4gkzM2AZIyMOKzAgFICAUCASAHBgBBvl+XaiaGmPmOmf6f+Y+gJoqRBAIHoHN9CYyS2/yV3R8UABe9nOdqJoaa+Y64X/wABNAw';
 
 const WALLET_ID = 0;

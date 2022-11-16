@@ -21,10 +21,10 @@ export class GenericAccount implements Account {
   private publicKey?: string;
 
   constructor(args: {
-    address: string | Address,
-    abi: object | string,
-    prepareMessage: PrepareMessage
-    publicKey?: string,
+    address: string | Address;
+    abi: object | string;
+    prepareMessage: PrepareMessage;
+    publicKey?: string;
   }) {
     this.address = args.address instanceof Address ? args.address : new Address(args.address);
     this.abi = typeof args.abi === 'string' ? args.abi : JSON.stringify(args.abi);
@@ -46,7 +46,7 @@ export class GenericAccount implements Account {
 
     const { method, params, stateInit } = await this.prepareMessageImpl(args, ctx);
 
-    return await ctx.createExternalMessage({
+    return ctx.createExternalMessage({
       address: this.address,
       signer,
       timeout: args.timeout,
@@ -62,18 +62,13 @@ export class GenericAccount implements Account {
  * @category AccountsStorage
  */
 export class MsigAccount extends GenericAccount {
-  constructor(args: {
-    address: string | Address,
-    publicKey?: string
-  }) {
+  constructor(args: { address: string | Address; publicKey?: string; type: 'SafeMultisig' | 'multisig2' }) {
     super({
       address: args.address,
       publicKey: args.publicKey,
-      abi: MSIG_ABI,
+      abi: args.type == 'multisig2' ? MSIG2_ABI : MSIG_ABI,
       prepareMessage: async (args, ctx) => {
-        const payload = args.payload
-          ? ctx.encodeInternalInput(args.payload)
-          : '';
+        const payload = args.payload ? ctx.encodeInternalInput(args.payload) : '';
         return {
           method: 'sendTransaction',
           params: {
@@ -91,6 +86,24 @@ export class MsigAccount extends GenericAccount {
 
 const MSIG_ABI = `{
   "ABI version": 2,
+  "header": ["pubkey", "time", "expire"],
+  "functions": [{
+    "name": "sendTransaction",
+    "inputs": [
+      {"name":"dest","type":"address"},
+      {"name":"value","type":"uint128"},
+      {"name":"bounce","type":"bool"},
+      {"name":"flags","type":"uint8"},
+      {"name":"payload","type":"cell"}
+    ],
+    "outputs": []
+  }],
+  "events": []
+}`;
+
+const MSIG2_ABI = `{
+  "ABI version": 2,
+  "version": "2.3",
   "header": ["pubkey", "time", "expire"],
   "functions": [{
     "name": "sendTransaction",

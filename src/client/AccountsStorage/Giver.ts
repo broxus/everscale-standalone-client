@@ -58,10 +58,7 @@ export class GiverAccount implements Account {
     });
   }
 
-  constructor(args: {
-    address: string | Address,
-    publicKey: string,
-  }) {
+  constructor(args: { address: string | Address; publicKey: string }) {
     this.address = args.address instanceof Address ? args.address : new Address(args.address);
     this.publicKey = args.publicKey;
   }

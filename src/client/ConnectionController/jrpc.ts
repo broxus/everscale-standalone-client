@@ -16,13 +16,10 @@ export type JrpcSocketParams = {
    * Alternative JRPC API that will be used for broadcasting messages or fetching states
    */
   alternativeEndpoint?: string;
-}
+};
 
 export class JrpcSocket {
-  public async connect(
-    clock: nt.ClockWithOffset,
-    params: JrpcSocketParams,
-  ): Promise<nt.JrpcConnection> {
+  public async connect(clock: nt.ClockWithOffset, params: JrpcSocketParams): Promise<nt.JrpcConnection> {
     class JrpcSender {
       private readonly endpoint: string;
       private readonly endpointAgent?: any;
@@ -32,14 +29,12 @@ export class JrpcSocket {
       constructor(params: JrpcSocketParams) {
         this.endpoint = params.endpoint;
         this.endpointAgent = fetchAgent(this.endpoint);
-        this.alternativeEndpoint = params.alternativeEndpoint != null
-          ? params.alternativeEndpoint
-          : params.endpoint;
+        this.alternativeEndpoint = params.alternativeEndpoint != null ? params.alternativeEndpoint : params.endpoint;
         this.alternativeEndpointAgent = fetchAgent(this.alternativeEndpoint);
       }
 
       send(data: string, handler: nt.JrpcQuery, requiresDb: boolean) {
-        ;(async () => {
+        (async () => {
           try {
             const url = requiresDb ? this.endpoint : this.alternativeEndpoint;
             const agent = requiresDb ? this.endpointAgent : this.alternativeEndpointAgent;
@@ -49,7 +44,7 @@ export class JrpcSocket {
               headers: DEFAULT_HEADERS,
               body: data,
               agent,
-            } as RequestInit).then((response) => response.text());
+            } as RequestInit).then(response => response.text());
             handler.onReceive(response);
           } catch (e: any) {
             handler.onError(e);

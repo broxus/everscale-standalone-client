@@ -9,6 +9,7 @@ export { GiverAccount } from './Giver';
 export { GenericAccount, MsigAccount } from './Generic';
 export { WalletV3Account } from './WalletV3';
 export { HighloadWalletV2 } from './HighloadWalletV2';
+export { EverWalletAccount } from './EverWallet';
 
 /**
  * @category AccountsStorage
@@ -90,8 +91,7 @@ export class AccountsStorageContext {
     private readonly connectionController: ConnectionController,
     private readonly nekoton: typeof nt,
     private readonly keystore?: Keystore,
-  ) {
-  }
+  ) {}
 
   public async getSigner(publicKey: string): Promise<Signer> {
     if (this.keystore == null) {
@@ -122,26 +122,23 @@ export class AccountsStorageContext {
 
   public async getFullContractState(address: string | Address): Promise<nt.FullContractState | undefined> {
     return this.connectionController.use(async ({ data: { transport } }) =>
-      transport.getFullContractState(address.toString()));
+      transport.getFullContractState(address.toString()),
+    );
   }
 
   public extractContractData(boc: string): string | undefined {
     return this.nekoton.extractContractData(boc);
   }
 
-  public packIntoCell(args: {
-    structure: nt.AbiParam[],
-    data: nt.TokensObject,
-    abiVersion?: AbiVersion
-  }): string {
+  public packIntoCell(args: { structure: nt.AbiParam[]; data: nt.TokensObject; abiVersion?: AbiVersion }): string {
     return this.nekoton.packIntoCell(args.structure, args.data, args.abiVersion);
   }
 
   public unpackFromCell(args: {
-    structure: nt.AbiParam[],
-    boc: string,
-    allowPartial: boolean,
-    abiVersion?: AbiVersion
+    structure: nt.AbiParam[];
+    boc: string;
+    allowPartial: boolean;
+    abiVersion?: AbiVersion;
   }): nt.TokensObject {
     return this.nekoton.unpackFromCell(args.structure, args.boc, args.allowPartial, args.abiVersion);
   }
@@ -159,31 +156,24 @@ export class AccountsStorageContext {
   }
 
   public encodeInternalMessage(args: {
-    src?: string,
-    dst: string,
-    bounce: boolean,
-    stateInit?: string,
-    body?: string,
-    amount: string,
+    src?: string;
+    dst: string;
+    bounce: boolean;
+    stateInit?: string;
+    body?: string;
+    amount: string;
   }): string {
-    return this.nekoton.encodeInternalMessage(
-      args.src,
-      args.dst,
-      args.bounce,
-      args.stateInit,
-      args.body,
-      args.amount,
-    );
+    return this.nekoton.encodeInternalMessage(args.src, args.dst, args.bounce, args.stateInit, args.body, args.amount);
   }
 
   public async createExternalMessage(args: {
-    address: string | Address,
-    signer: Signer,
-    timeout: number,
-    abi: string,
-    method: string,
-    params: nt.TokensObject,
-    stateInit?: string,
+    address: string | Address;
+    signer: Signer;
+    timeout: number;
+    abi: string;
+    method: string;
+    params: nt.TokensObject;
+    stateInit?: string;
   }): Promise<nt.SignedMessage> {
     const unsignedMessage = this.nekoton.createExternalMessage(
       this.clock,
@@ -205,17 +195,12 @@ export class AccountsStorageContext {
   }
 
   public createRawExternalMessage(args: {
-    address: string | Address,
-    body?: string,
-    stateInit?: string,
-    expireAt: number
+    address: string | Address;
+    body?: string;
+    stateInit?: string;
+    expireAt: number;
   }): nt.SignedMessage {
-    return this.nekoton.createRawExternalMessage(
-      args.address.toString(),
-      args.stateInit,
-      args.body,
-      args.expireAt,
-    );
+    return this.nekoton.createRawExternalMessage(args.address.toString(), args.stateInit, args.body, args.expireAt);
   }
 }
 
@@ -233,7 +218,7 @@ export class SimpleAccountsStorage implements AccountsStorage {
    *
    * @param args
    */
-  constructor(args: { defaultAccount?: Address | string, entries?: Iterable<Account> } = {}) {
+  constructor(args: { defaultAccount?: Address | string; entries?: Iterable<Account> } = {}) {
     if (args.entries != null) {
       for (const account of args.entries) {
         if (this._defaultAccount == null) {
@@ -267,7 +252,7 @@ export class SimpleAccountsStorage implements AccountsStorage {
     if (address != null && !this.accounts.has(address)) {
       throw new Error('Account not found in storage');
     }
-    this._defaultAccount = (value == null || value instanceof Address) ? value : new Address(value);
+    this._defaultAccount = value == null || value instanceof Address ? value : new Address(value);
   }
 
   public async getAccount(address: string | Address): Promise<Account | undefined> {

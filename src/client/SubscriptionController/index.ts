@@ -25,10 +25,7 @@ export class SubscriptionController {
     this._notify = notify;
   }
 
-  public async sendMessageLocally(
-    address: string,
-    signedMessage: nt.SignedMessage,
-  ): Promise<nt.Transaction> {
+  public async sendMessageLocally(address: string, signedMessage: nt.SignedMessage): Promise<nt.Transaction> {
     const subscriptionId = getUniqueId();
     try {
       await this.subscribeToContract(address, { state: true }, subscriptionId);
@@ -37,8 +34,7 @@ export class SubscriptionController {
         throw new Error('Failed to subscribe to contract');
       }
 
-      return await subscription.use((contract) =>
-        contract.sendMessageLocally(signedMessage));
+      return await subscription.use(contract => contract.sendMessageLocally(signedMessage));
     } finally {
       this.unsubscribeFromContract(address, subscriptionId).catch(console.error);
     }
@@ -64,11 +60,10 @@ export class SubscriptionController {
           }
 
           await subscription.prepareReliablePolling();
-          await subscription
-            .use(async (contract) => {
-              await contract.sendMessage(signedMessage);
-              subscription.skipRefreshTimer();
-            });
+          await subscription.use(async contract => {
+            await contract.sendMessage(signedMessage);
+            subscription.skipRefreshTimer();
+          });
         })
         .catch((e: any) => this._rejectMessageRequest(address, id, e))
         .finally(() => {
@@ -83,9 +78,9 @@ export class SubscriptionController {
     internalId?: number,
   ): Promise<ever.ContractUpdatesSubscription> {
     return this._subscriptionsMutex.use(async () => {
-      let mergeInputParams = (currentParams: ever.ContractUpdatesSubscription): ever.ContractUpdatesSubscription => {
+      const mergeInputParams = (currentParams: ever.ContractUpdatesSubscription): ever.ContractUpdatesSubscription => {
         const newParams = { ...currentParams };
-        Object.keys(newParams).map((param) => {
+        Object.keys(newParams).map(param => {
           if (param !== 'state' && param !== 'transactions') {
             throw new Error(`Unknown subscription topic: ${param}`);
           }
@@ -111,7 +106,7 @@ export class SubscriptionController {
       } else {
         // Internal subscription with id
         // Changed params are `SubscriptionState.internal[internalId]`
-        let exisingParams = subscriptionState.internal.get(internalId);
+        const exisingParams = subscriptionState.internal.get(internalId);
         if (exisingParams != null) {
           // Updating existing internal params
           changedParams = mergeInputParams(exisingParams);
@@ -127,7 +122,7 @@ export class SubscriptionController {
       }
 
       // Merge changed params with the rest of internal params
-      let computedParams = { ...changedParams };
+      const computedParams = { ...changedParams };
       for (const params of subscriptionState.internal.values()) {
         computedParams.state ||= params.state;
         computedParams.transactions ||= params.transactions;
@@ -168,10 +163,14 @@ export class SubscriptionController {
   }
 
   public async unsubscribeFromContract(address: string, internalId?: number) {
-    await this.subscribeToContract(address, {
-      state: false,
-      transactions: false,
-    }, internalId);
+    await this.subscribeToContract(
+      address,
+      {
+        state: false,
+        transactions: false,
+      },
+      internalId,
+    );
   }
 
   public async unsubscribeFromAllContracts(internalId?: number) {
@@ -307,8 +306,8 @@ export class SubscriptionController {
 }
 
 type SubscriptionState = {
-  internal: Map<number, ever.ContractUpdatesSubscription>,
-  client: ever.ContractUpdatesSubscription,
+  internal: Map<number, ever.ContractUpdatesSubscription>;
+  client: ever.ContractUpdatesSubscription;
 };
 
 const makeDefaultSubscriptionState = (): SubscriptionState => ({
@@ -319,8 +318,7 @@ const makeDefaultSubscriptionState = (): SubscriptionState => ({
   },
 });
 
-const isEmptySubscription = (params: ever.ContractUpdatesSubscription) =>
-  !params.state && !params.transactions;
+const isEmptySubscription = (params: ever.ContractUpdatesSubscription) => !params.state && !params.transactions;
 
 export type SendMessageCallback = {
   resolve: (transaction?: nt.Transaction) => void;

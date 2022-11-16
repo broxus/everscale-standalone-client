@@ -31,7 +31,14 @@ import { EverscaleStandaloneClient } from 'everscale-standalone-client';
 const ever = new ProviderRpcClient({
   fallback: () =>
     EverscaleStandaloneClient.create({
-      connection: 'mainnet',
+      connection: {
+        id: 2, // network id
+        type: 'graphql',
+        data: {
+          // create your own project at https://dashboard.evercloud.dev
+          endpoints: ['https://devnet-sandbox.evercloud.dev/graphql'],
+        },
+      },
     }),
 });
 
@@ -42,7 +49,7 @@ async function myApp() {
     permissions: ['basic'],
   });
 
-  const dePoolAddress = new Address('0:bbcbf7eb4b6f1203ba2d4ff5375de30a5408a8130bf79f870efbcfd49ec164e9');
+  const dePoolAddress = new Address('0:2e0ea1716eb93db16077d30e51d092b075ce7f0eb1c08ca5bea67ef48a79368e');
 
   const dePool = new ever.Contract(DePoolAbi, dePoolAddress);
 
@@ -84,7 +91,9 @@ const DePoolAbi = {
 
 myApp().catch(console.error);
 ```
+
 ### Build with Vite
+
 Using [Vite](https://vitejs.dev) you will stuck with [issue](https://github.com/vitejs/vite/issues/8427). As workaround you may initialize provider like in the example below.
 
 ```js
@@ -95,9 +104,10 @@ const client = new ProviderRpcClient({
   forceUseFallback: true,
   fallback: () =>
     EverscaleStandaloneClient.create({
-      connection: 'mainnet',
+      connection: {
+        /*...*/
+      },
       initInput: '../../node_modules/nekoton-wasm/nekoton_wasm_bg.wasm',
     }),
 });
-
 ```

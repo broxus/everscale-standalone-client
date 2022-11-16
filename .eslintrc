@@ -6,22 +6,13 @@
     "worker": true,
     "serviceworker": true
   },
-  "extends": [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended",
-    "prettier"
-  ],
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended", "prettier"],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
     "sourceType": "module"
   },
-  "plugins": [
-    "@typescript-eslint",
-    "prettier"
-  ],
-  "ignorePatterns": [
-    "dist/*"
-  ],
+  "plugins": ["@typescript-eslint", "prettier"],
+  "ignorePatterns": ["dist/*"],
   "rules": {
     "no-constant-condition": "off",
     "no-var": "error",
@@ -37,14 +28,8 @@
       }
     ],
     "camelcase": "error",
-    "linebreak-style": [
-      "error",
-      "unix"
-    ],
-    "quotes": [
-      "error",
-      "single"
-    ],
+    "linebreak-style": ["error", "unix"],
+    "quotes": ["error", "single"],
     "no-unused-vars": "off",
     "@typescript-eslint/no-unused-vars": [
       "error",
@@ -62,9 +47,7 @@
     "@typescript-eslint/no-this-alias": [
       "error",
       {
-        "allowedNames": [
-          "self"
-        ]
+        "allowedNames": ["self"]
       }
     ]
   }

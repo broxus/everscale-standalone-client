@@ -14,19 +14,17 @@ export class WalletV3Account implements Account {
   public readonly address: Address;
   private publicKey?: BigNumber;
 
-  public static async computeAddress(args: { publicKey: string | BigNumber, workchain?: number }): Promise<Address> {
+  public static async computeAddress(args: { publicKey: string | BigNumber; workchain?: number }): Promise<Address> {
     // TODO: Somehow propagate init params
     await ensureNekotonLoaded();
 
-    const publicKey = args.publicKey instanceof BigNumber
-      ? args.publicKey
-      : new BigNumber(`0x${args.publicKey}`);
+    const publicKey = args.publicKey instanceof BigNumber ? args.publicKey : new BigNumber(`0x${args.publicKey}`);
     const tvc = makeStateInit(publicKey);
     const hash = nekoton.getBocHash(tvc);
     return new Address(`${args.workchain != null ? args.workchain : 0}:${hash}`);
   }
 
-  public static async fromPubkey(args: { publicKey: string, workchain?: number }): Promise<WalletV3Account> {
+  public static async fromPubkey(args: { publicKey: string; workchain?: number }): Promise<WalletV3Account> {
     const publicKey = new BigNumber(`0x${args.publicKey}`);
     const address = await WalletV3Account.computeAddress({ publicKey, workchain: args.workchain });
     const result = new WalletV3Account(address);
@@ -41,7 +39,8 @@ export class WalletV3Account implements Account {
   async fetchPublicKey(ctx: AccountsStorageContext): Promise<string> {
     let publicKey = this.publicKey;
     if (publicKey == null) {
-      publicKey = this.publicKey = await ctx.fetchPublicKey(this.address)
+      publicKey = this.publicKey = await ctx
+        .fetchPublicKey(this.address)
         .then(publicKey => new BigNumber(`0x${publicKey}`));
     }
     return publicKey.toString(16).padStart(64, '0');
@@ -53,9 +52,7 @@ export class WalletV3Account implements Account {
 
     const expireAt = ctx.nowSec + args.timeout;
 
-    const attachedPayload = args.payload
-      ? ctx.encodeInternalInput(args.payload)
-      : undefined;
+    const attachedPayload = args.payload ? ctx.encodeInternalInput(args.payload) : undefined;
 
     const internalMessage = ctx.encodeInternalMessage({
       dst: args.recipient,
@@ -94,12 +91,12 @@ export class WalletV3Account implements Account {
   }
 
   private async fetchState(ctx: AccountsStorageContext): Promise<{
-    seqno: number,
-    publicKey: string,
-    stateInit?: string,
+    seqno: number;
+    publicKey: string;
+    stateInit?: string;
   }> {
     let stateInit: string | undefined = undefined;
-    let result: { seqno: number, publicKey: BigNumber };
+    let result: { seqno: number; publicKey: BigNumber };
 
     const state = await ctx.getFullContractState(this.address);
     if (state == null || !state.isDeployed) {
@@ -131,7 +128,7 @@ export class WalletV3Account implements Account {
   }
 }
 
-const parseInitData = (ctx: AccountsStorageContext, boc: string): { seqno: number, publicKey: BigNumber } => {
+const parseInitData = (ctx: AccountsStorageContext, boc: string): { seqno: number; publicKey: BigNumber } => {
   const parsed = ctx.unpackFromCell({
     structure: DATA_STRUCTURE,
     boc,
@@ -175,6 +172,7 @@ const DATA_STRUCTURE: nt.AbiParam[] = [
   { name: 'publicKey', type: 'uint256' },
 ];
 
-const WALLET_V3_CODE = 'te6ccgEBAQEAcQAA3v8AIN0gggFMl7ohggEznLqxn3Gw7UTQ0x/THzHXC//jBOCk8mCDCNcYINMf0x/TH/gjE7vyY+1E0NMf0x/T/9FRMrryoVFEuvKiBPkBVBBV+RDyo/gAkyDXSpbTB9QC+wDo0QGkyMsfyx/L/8ntVA==';
+const WALLET_V3_CODE =
+  'te6ccgEBAQEAcQAA3v8AIN0gggFMl7ohggEznLqxn3Gw7UTQ0x/THzHXC//jBOCk8mCDCNcYINMf0x/TH/gjE7vyY+1E0NMf0x/T/9FRMrryoVFEuvKiBPkBVBBV+RDyo/gAkyDXSpbTB9QC+wDo0QGkyMsfyx/L/8ntVA==';
 
-const WALLET_ID = 0x4BA92D8A;
+const WALLET_ID = 0x4ba92d8a;

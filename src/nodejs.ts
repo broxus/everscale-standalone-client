@@ -15,8 +15,9 @@ import core from './core';
 core.ensureNekotonLoaded = (): Promise<void> => Promise.resolve();
 core.nekoton = nekoton;
 core.fetch = fetch as any;
-core.fetchAgent = (url) => new URL(url).protocol == 'http:' ? httpAgent : httpsAgent;
-core.debugLog = (_nothing) => { /* do nothing */
+core.fetchAgent = url => (new URL(url).protocol == 'http:' ? httpAgent : httpsAgent);
+core.debugLog = _nothing => {
+  /* do nothing */
 };
 
 export * from './client';

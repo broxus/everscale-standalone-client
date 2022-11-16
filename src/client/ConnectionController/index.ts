@@ -10,47 +10,19 @@ export { JrpcSocketParams } from './jrpc';
 
 const { nekoton, debugLog } = core;
 
-export const DEFAULT_NETWORK_GROUP = 'mainnet';
-
 /**
  * @category Client
  */
 export const NETWORK_PRESETS = {
-  mainnet: {
-    id: 1,
-    group: 'mainnet',
-    type: 'graphql',
-    data: {
-      endpoints: [
-        'eri01.main.everos.dev',
-        'gra01.main.everos.dev',
-        'gra02.main.everos.dev',
-        'lim01.main.everos.dev',
-        'rbx01.main.everos.dev',
-      ],
-      local: false,
-    },
-  } as ConnectionData,
   mainnetJrpc: {
     id: 1,
-    group: 'mainnet',
     type: 'jrpc',
     data: {
       endpoint: 'https://jrpc.everwallet.net/rpc',
     },
   } as ConnectionData,
-  testnet: {
-    id: 2,
-    group: 'testnet',
-    type: 'graphql',
-    data: {
-      endpoints: ['eri01.net.everos.dev', 'rbx01.net.everos.dev', 'gra01.net.everos.dev'],
-      local: false,
-    },
-  } as ConnectionData,
   fld: {
     id: 10,
-    group: 'fld',
     type: 'graphql',
     data: {
       endpoints: ['gql.custler.net'],
@@ -59,7 +31,6 @@ export const NETWORK_PRESETS = {
   } as ConnectionData,
   local: {
     id: 31337,
-    group: 'localnet',
     type: 'graphql',
     data: {
       endpoints: ['127.0.0.1'],
@@ -68,10 +39,25 @@ export const NETWORK_PRESETS = {
   } as ConnectionData,
 } as const;
 
+const matchNetworkGroup = (id: number): string => {
+  switch (id) {
+    case 1:
+      return 'mainnet';
+    case 2:
+      return 'testnet';
+    case 10:
+      return 'fld';
+    case 31337:
+      return 'localnet';
+    default:
+      return `network${id}`;
+  }
+};
+
 /**
  * @category Client
  */
-export type ConnectionProperties = (keyof typeof NETWORK_PRESETS) | ConnectionData
+export type ConnectionProperties = keyof typeof NETWORK_PRESETS | ConnectionData;
 
 function loadPreset(params: ConnectionProperties): ConnectionData {
   if (typeof params === 'string') {
@@ -128,13 +114,13 @@ export async function createConnectionController(
   while (true) {
     try {
       const controller = new ConnectionController(clock);
-      await controller.startSwitchingNetwork(preset).then((handle) => handle.switch());
+      await controller.startSwitchingNetwork(preset).then(handle => handle.switch());
       debugLog(`Successfully connected to ${preset.group}`);
       return controller;
     } catch (e: any) {
       if (retry) {
         console.error('Connection failed:', e);
-        await new Promise<void>((resolve) => {
+        await new Promise<void>(resolve => {
           setTimeout(() => resolve(), 5000);
         });
         debugLog('Restarting connection process');
@@ -171,10 +157,9 @@ export class ConnectionController {
     requireInitializedTransport(this._initializedTransport);
     await this._acquireTransport();
 
-    return f(this._initializedTransport)
-      .finally(() => {
-        this._releaseTransport();
-      });
+    return f(this._initializedTransport).finally(() => {
+      this._releaseTransport();
+    });
   }
 
   public async startSwitchingNetwork(params: ConnectionData): Promise<INetworkSwitchHandle> {
@@ -183,20 +168,14 @@ export class ConnectionController {
       private readonly _release: () => void;
       private readonly _params: ConnectionData;
 
-      constructor(
-        controller: ConnectionController,
-        release: () => void,
-        params: ConnectionData,
-      ) {
+      constructor(controller: ConnectionController, release: () => void, params: ConnectionData) {
         this._controller = controller;
         this._release = release;
         this._params = params;
       }
 
       public async switch() {
-        await this._controller
-          ._connect(this._params)
-          .finally(() => this._release());
+        await this._controller._connect(this._params).finally(() => this._release());
       }
     }
 
@@ -221,78 +200,79 @@ export class ConnectionController {
       CANCELLED,
     }
 
-    const testTransport = async ({ data: { transport } }: InitializedTransport, local: boolean): Promise<TestConnectionResult> => {
+    const testTransport = async (
+      { data: { transport } }: InitializedTransport,
+      local: boolean,
+    ): Promise<TestConnectionResult> => {
       return new Promise<TestConnectionResult>((resolve, reject) => {
         this._cancelTestTransport = () => resolve(TestConnectionResult.CANCELLED);
 
         if (local) {
           transport
-            .getAccountsByCodeHash(
-              '4e92716de61d456e58f16e4e867e3e93a7548321eace86301b51c8b80ca6239b', 1,
-            )
+            .getAccountsByCodeHash('4e92716de61d456e58f16e4e867e3e93a7548321eace86301b51c8b80ca6239b', 1)
             .then(() => resolve(TestConnectionResult.DONE))
             .catch((e: any) => reject(e));
         } else {
           // Try to get any account state
           transport
-            .getFullContractState(
-              '-1:0000000000000000000000000000000000000000000000000000000000000000',
-            )
+            .getFullContractState('-1:0000000000000000000000000000000000000000000000000000000000000000')
             .then(() => resolve(TestConnectionResult.DONE))
             .catch((e: any) => reject(e));
         }
 
         setTimeout(() => reject(new Error('Connection timeout')), 10000);
-      }).finally(() => this._cancelTestTransport = undefined);
+      }).finally(() => (this._cancelTestTransport = undefined));
     };
 
     try {
+      const group = params.group != null ? params.group : matchNetworkGroup(params.id);
+
       const { local, transportData } = await (params.type === 'graphql'
         ? async () => {
-          const socket = new GqlSocket();
-          const connection = await socket.connect(this._clock, params.data);
-          const transport = nekoton.Transport.fromGqlConnection(connection);
+            const socket = new GqlSocket();
+            const connection = await socket.connect(this._clock, params.data);
+            const transport = nekoton.Transport.fromGqlConnection(connection);
 
-          const transportData: InitializedTransport = {
-            id: params.id,
-            group: params.group,
-            type: 'graphql',
-            data: {
-              socket,
-              connection,
-              transport,
-            },
-          };
+            const transportData: InitializedTransport = {
+              id: params.id,
+              group,
+              type: 'graphql',
+              data: {
+                socket,
+                connection,
+                transport,
+              },
+            };
 
-          return {
-            local: params.data.local,
-            transportData,
-          };
-        }
+            return {
+              local: params.data.local === true,
+              transportData,
+            };
+          }
         : async () => {
-          const socket = new JrpcSocket();
-          const connection = await socket.connect(this._clock, params.data);
-          const transport = nekoton.Transport.fromJrpcConnection(connection);
+            const socket = new JrpcSocket();
+            const connection = await socket.connect(this._clock, params.data);
+            const transport = nekoton.Transport.fromJrpcConnection(connection);
 
-          const transportData: InitializedTransport = {
-            id: params.id,
-            group: params.group,
-            type: 'jrpc',
-            data: {
-              socket,
-              connection,
-              transport,
-            },
-          };
+            const transportData: InitializedTransport = {
+              id: params.id,
+              group,
+              type: 'jrpc',
+              data: {
+                socket,
+                connection,
+                transport,
+              },
+            };
 
-          return {
-            local: false,
-            transportData,
-          };
-        })();
+            return {
+              local: false,
+              transportData,
+            };
+          })();
 
       try {
-        if (await testTransport(transportData, local) == TestConnectionResult.CANCELLED) {
+        if ((await testTransport(transportData, local)) == TestConnectionResult.CANCELLED) {
           cleanupInitializedTransport(transportData);
           return;
         }
@@ -357,15 +337,15 @@ function requireInitializedTransport(transport?: InitializedTransport): asserts 
 /**
  * @category Client
  */
-export type ConnectionData = { id: number, group: string } & (
-  | { type: 'graphql', data: GqlSocketParams }
-  | { type: 'jrpc', data: JrpcSocketParams }
-  )
+export type ConnectionData = { id: number; group?: string } & (
+  | { type: 'graphql'; data: GqlSocketParams }
+  | { type: 'jrpc'; data: JrpcSocketParams }
+);
 
 /**
  * @category Client
  */
-export type InitializedTransport = { id: number, group: string } & (
-  | { type: 'graphql', data: { socket: GqlSocket, connection: nt.GqlConnection, transport: nt.Transport } }
-  | { type: 'jrpc', data: { socket: JrpcSocket, connection: nt.JrpcConnection, transport: nt.Transport } }
-  )
+export type InitializedTransport = { id: number; group: string } & (
+  | { type: 'graphql'; data: { socket: GqlSocket; connection: nt.GqlConnection; transport: nt.Transport } }
+  | { type: 'jrpc'; data: { socket: JrpcSocket; connection: nt.JrpcConnection; transport: nt.Transport } }
+);

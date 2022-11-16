@@ -9,30 +9,32 @@ const { nekoton, fetch, fetchAgent, debugLog } = core;
  */
 export type GqlSocketParams = {
   /**
-   * Path to graphql api endpoints, e.g. `https://main.ton.dev`
+   * Path to graphql api endpoints, e.g. `https://mainnet.evercloud.dev/123123/graphql`
    */
   endpoints: string[];
   /**
    * Gql node type
+   *
+   * @defaultValue `false`
    */
-  local: boolean;
+  local?: boolean;
   /**
    * Frequency of sync latency detection
+   *
+   * @defaultValue `60000`
    */
   latencyDetectionInterval?: number;
   /**
    * Maximum value for the endpoint's blockchain data sync latency
    */
   maxLatency?: number;
-}
+};
 
 export class GqlSocket {
-  public async connect(
-    clock: nt.ClockWithOffset,
-    params: GqlSocketParams,
-  ): Promise<nt.GqlConnection> {
+  public async connect(clock: nt.ClockWithOffset, params: GqlSocketParams): Promise<nt.GqlConnection> {
     class GqlSender implements nt.IGqlSender {
-      private readonly params: GqlSocketParams;
+      private readonly local: boolean;
+      private readonly maxLatency: number;
       private readonly latencyDetectionInterval: number;
       private readonly endpoints: Endpoint[];
       private nextLatencyDetectionTime = 0;
@@ -40,7 +42,8 @@ export class GqlSocket {
       private resolutionPromise?: Promise<Endpoint>;
 
       constructor(params: GqlSocketParams) {
-        this.params = params;
+        this.local = params.local === true;
+        this.maxLatency = params.maxLatency || 60000;
         this.latencyDetectionInterval = params.latencyDetectionInterval || 60000;
         this.endpoints = params.endpoints.map(GqlSocket.expandAddress);
         if (this.endpoints.length == 1) {
@@ -50,11 +53,11 @@ export class GqlSocket {
       }
 
       isLocal(): boolean {
-        return this.params.local;
+        return this.local;
       }
 
       send(data: string, handler: nt.GqlQuery, _longQuery: boolean) {
-        ;(async () => {
+        (async () => {
           const now = Date.now();
           try {
             let endpoint: Endpoint;
@@ -68,13 +71,11 @@ export class GqlSocket {
             } else {
               delete this.currentEndpoint;
               // Start resolving (current endpoint is null, or it is time to refresh)
-              this.resolutionPromise = this._selectQueryingEndpoint().then(
-                (endpoint) => {
-                  this.currentEndpoint = endpoint;
-                  this.nextLatencyDetectionTime = Date.now() + this.latencyDetectionInterval;
-                  return endpoint;
-                },
-              );
+              this.resolutionPromise = this._selectQueryingEndpoint().then(endpoint => {
+                this.currentEndpoint = endpoint;
+                this.nextLatencyDetectionTime = Date.now() + this.latencyDetectionInterval;
+                return endpoint;
+              });
               endpoint = await this.resolutionPromise;
               delete this.resolutionPromise;
             }
@@ -84,7 +85,7 @@ export class GqlSocket {
               headers: DEFAULT_HEADERS,
               body: data,
               agent: endpoint.agent,
-            } as RequestInit).then((response) => response.text());
+            } as RequestInit).then(response => response.text());
             handler.onReceive(response);
           } catch (e: any) {
             handler.onError(e);
@@ -93,7 +94,7 @@ export class GqlSocket {
       }
 
       private async _selectQueryingEndpoint(): Promise<Endpoint> {
-        const maxLatency = this.params.maxLatency || 60000;
+        const maxLatency = this.maxLatency;
         const endpointCount = this.endpoints.length;
 
         for (let retryCount = 0; retryCount < 5; ++retryCount) {
@@ -109,7 +110,7 @@ export class GqlSocket {
           let lastLatency: { endpoint: Endpoint; latency: number | undefined } | undefined;
 
           for (const endpoint of this.endpoints) {
-            GqlSocket.checkLatency(endpoint).then((latency) => {
+            GqlSocket.checkLatency(endpoint).then(latency => {
               ++checkedEndpoints;
 
               if (latency !== undefined && latency <= maxLatency) {
@@ -138,7 +139,7 @@ export class GqlSocket {
             return await promise;
           } catch (e: any) {
             let resolveDelay: () => void;
-            const delayPromise = new Promise<void>((resolve) => {
+            const delayPromise = new Promise<void>(resolve => {
               resolveDelay = () => resolve();
             });
             setTimeout(() => resolveDelay(), Math.min(100 * retryCount, 5000));
@@ -154,15 +155,15 @@ export class GqlSocket {
   }
 
   static async checkLatency(endpoint: Endpoint): Promise<number | undefined> {
-    const response = await fetch(`${endpoint.url}?query=%7Binfo%7Bversion%20time%20latency%7D%7D`, {
+    const response = (await fetch(`${endpoint.url}?query=%7Binfo%7Bversion%20time%20latency%7D%7D`, {
       method: 'get',
       agent: endpoint.agent,
     } as RequestInit)
-      .then((response) => response.json())
+      .then(response => response.json())
       .catch((e: any) => {
         debugLog(e);
         return undefined;
-      }) as any;
+      })) as any;
 
     if (typeof response !== 'object' || response == null) {
       return;
@@ -206,9 +207,9 @@ export class GqlSocket {
 }
 
 type Endpoint = {
-  url: string,
-  agent?: any,
-}
+  url: string;
+  agent?: any;
+};
 
 const DEFAULT_HEADERS = {
   'Content-Type': 'application/json',

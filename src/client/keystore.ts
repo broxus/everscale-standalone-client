@@ -84,11 +84,11 @@ export class SimpleKeystore implements Keystore {
       /**
        * Default: public key of the new key pair
        */
-      keyId?: string,
+      keyId?: string;
       /**
        * Default: false
        */
-      keepOnError?: boolean
+      keepOnError?: boolean;
     } = {},
   ): Promise<string> {
     const newKey = SimpleKeystore.generateKeyPair();
@@ -117,8 +117,7 @@ export class SimpleKeystore implements Keystore {
 }
 
 class SimpleSigner implements Signer {
-  constructor(private readonly keyPair: nt.Ed25519KeyPair) {
-  }
+  constructor(private readonly keyPair: nt.Ed25519KeyPair) {}
 
   readonly publicKey: string = this.keyPair.publicKey;
 

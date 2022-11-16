@@ -20,9 +20,15 @@ export class ContractSubscription {
   private _currentBlockId?: string;
   private _suggestedBlockId?: string;
 
-  public static async subscribe(connectionController: ConnectionController, address: string, handler: IContractHandler<nt.Transaction>) {
+  public static async subscribe(
+    connectionController: ConnectionController,
+    address: string,
+    handler: IContractHandler<nt.Transaction>,
+  ) {
     const {
-      transport: { data: { connection, transport } },
+      transport: {
+        data: { connection, transport },
+      },
       release,
     } = await connectionController.acquire();
 
@@ -77,11 +83,9 @@ export class ContractSubscription {
           debugLog('ContractSubscription -> manual -> waiting begins');
 
           const pollingInterval =
-            this._currentPollingMethod == 'manual'
-              ? this._pollingInterval
-              : INTENSIVE_POLLING_INTERVAL;
+            this._currentPollingMethod == 'manual' ? this._pollingInterval : INTENSIVE_POLLING_INTERVAL;
 
-          await new Promise<void>((resolve) => {
+          await new Promise<void>(resolve => {
             const timerHandle = setTimeout(() => {
               this._refreshTimer = undefined;
               resolve();
@@ -132,11 +136,7 @@ export class ContractSubscription {
             }
           } else {
             try {
-              nextBlockId = await connection.waitForNextBlock(
-                this._currentBlockId,
-                this._address,
-                NEXT_BLOCK_TIMEOUT,
-              );
+              nextBlockId = await connection.waitForNextBlock(this._currentBlockId, this._address, NEXT_BLOCK_TIMEOUT);
             } catch (e: any) {
               console.error(`Failed to wait for next block for ${this._address}`);
               continue; // retry
@@ -205,11 +205,11 @@ export class ContractSubscription {
   public async use<T>(f: (contract: nt.GenericContract) => Promise<T>) {
     const release = await this._contractMutex.acquire();
     return f(this._contract)
-      .then((res) => {
+      .then(res => {
         release();
         return res;
       })
-      .catch((err) => {
+      .catch(err => {
         release();
         throw err;
       });
