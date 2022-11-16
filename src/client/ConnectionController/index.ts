@@ -337,10 +337,9 @@ function requireInitializedTransport(transport?: InitializedTransport): asserts 
 /**
  * @category Client
  */
-export type ConnectionData = { id: number; group?: string } & (
-  | { type: 'graphql'; data: GqlSocketParams }
-  | { type: 'jrpc'; data: JrpcSocketParams }
-);
+export type ConnectionData =
+  | { id: number; group?: string; type: 'graphql'; data: GqlSocketParams }
+  | { id: number; group?: string; type: 'jrpc'; data: JrpcSocketParams };
 
 /**
  * @category Client
