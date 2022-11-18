@@ -13,28 +13,45 @@ const { ensureNekotonLoaded, nekoton } = core;
 export class EverWalletAccount implements Account {
   public readonly address: Address;
   private publicKey?: BigNumber;
+  private nonce?: number;
   private isDeployed?: boolean;
 
-  public static async computeAddress(args: { publicKey: string | BigNumber; workchain?: number }): Promise<Address> {
+  public static async computeAddress(args: {
+    publicKey: string | BigNumber;
+    workchain?: number;
+    /**
+     * Optional nonce (uint32) which is appended to the initial data
+     */
+    nonce?: number;
+  }): Promise<Address> {
     // TODO: Somehow propagate init params
     await ensureNekotonLoaded();
 
     const publicKey = args.publicKey instanceof BigNumber ? args.publicKey : new BigNumber(`0x${args.publicKey}`);
-    const tvc = makeStateInit(publicKey);
+    const tvc = makeStateInit(publicKey, args.nonce);
     const hash = nekoton.getBocHash(tvc);
     return new Address(`${args.workchain != null ? args.workchain : 0}:${hash}`);
   }
 
-  public static async fromPubkey(args: { publicKey: string; workchain?: number }): Promise<EverWalletAccount> {
+  public static async fromPubkey(args: {
+    publicKey: string;
+    workchain?: number;
+    /**
+     * Optional nonce (uint32) which is appended to the initial data
+     */
+    nonce?: number;
+  }): Promise<EverWalletAccount> {
     const publicKey = new BigNumber(`0x${args.publicKey}`);
-    const address = await EverWalletAccount.computeAddress({ publicKey, workchain: args.workchain });
+    const address = await EverWalletAccount.computeAddress({ publicKey, workchain: args.workchain, nonce: args.nonce });
     const result = new EverWalletAccount(address);
     result.publicKey = publicKey;
+    result.nonce = args.nonce;
     return result;
   }
 
-  constructor(address: Address) {
+  constructor(address: Address, nonce?: number) {
     this.address = address;
+    this.nonce = nonce;
   }
 
   async fetchPublicKey(ctx: AccountsStorageContext): Promise<string> {
@@ -84,7 +101,7 @@ export class EverWalletAccount implements Account {
           throw new Error('Contract not deployed and public key was not specified');
         }
 
-        stateInit = makeStateInit(this.publicKey);
+        stateInit = makeStateInit(this.publicKey, this.nonce);
         publicKey = this.publicKey;
       } else {
         this.isDeployed = true;
@@ -103,17 +120,35 @@ export class EverWalletAccount implements Account {
   }
 }
 
-const makeStateInit = (publicKey: BigNumber) => {
-  const data = nekoton.packIntoCell(DATA_STRUCTURE, {
-    publicKey: publicKey.toFixed(0),
-    timestamp: 0,
-  });
+const makeStateInit = (publicKey: BigNumber, nonce?: number) => {
+  let params: nt.AbiParam[], tokens: nt.TokensObject;
+  if (nonce != null) {
+    params = DATA_STRUCTURE_EXT;
+    tokens = {
+      publicKey: publicKey.toFixed(0),
+      timestamp: 0,
+      nonce,
+    };
+  } else {
+    params = DATA_STRUCTURE;
+    tokens = {
+      publicKey: publicKey.toFixed(0),
+      timestamp: 0,
+    };
+  }
+
+  const data = nekoton.packIntoCell(params, tokens);
   return nekoton.mergeTvc(EVER_WALLET_CODE, data);
 };
 
 const DATA_STRUCTURE: nt.AbiParam[] = [
   { name: 'publicKey', type: 'uint256' },
   { name: 'timestamp', type: 'uint64' },
+];
+const DATA_STRUCTURE_EXT: nt.AbiParam[] = [
+  { name: 'publicKey', type: 'uint256' },
+  { name: 'timestamp', type: 'uint64' },
+  { name: 'nonce', type: 'uint32' },
 ];
 
 const EVER_WALLET_CODE =
