@@ -897,12 +897,13 @@ const sendMessage: ProviderHandler<'sendMessage'> = async (ctx, req) => {
   requireAccountsStorage(req, ctx);
   requireParams(req);
 
-  const { sender, recipient, amount, bounce, payload } = req.params;
+  const { sender, recipient, amount, bounce, payload, stateInit } = req.params;
   requireString(req, req.params, 'sender');
   requireString(req, req.params, 'recipient');
   requireString(req, req.params, 'amount');
   requireBoolean(req, req.params, 'bounce');
   requireOptional(req, req.params, 'payload', requireFunctionCall);
+  requireOptionalString(req, req.params, 'stateInit');
 
   const { clock, properties, subscriptionController, connectionController, keystore, accountsStorage } = ctx;
 
@@ -931,7 +932,7 @@ const sendMessage: ProviderHandler<'sendMessage'> = async (ctx, req) => {
           amount,
           bounce,
           payload,
-          stateInit: undefined,
+          stateInit,
           timeout,
         },
         new AccountsStorageContext(clock, connectionController, nekoton, keystore),
@@ -975,12 +976,13 @@ const sendMessageDelayed: ProviderHandler<'sendMessageDelayed'> = async (ctx, re
   requireAccountsStorage(req, ctx);
   requireParams(req);
 
-  const { sender, recipient, amount, bounce, payload } = req.params;
+  const { sender, recipient, amount, bounce, payload, stateInit } = req.params;
   requireString(req, req.params, 'sender');
   requireString(req, req.params, 'recipient');
   requireString(req, req.params, 'amount');
   requireBoolean(req, req.params, 'bounce');
   requireOptional(req, req.params, 'payload', requireFunctionCall);
+  requireOptionalString(req, req.params, 'stateInit');
 
   const { clock, subscriptionController, connectionController, keystore, accountsStorage, notify } = ctx;
 
@@ -1006,7 +1008,7 @@ const sendMessageDelayed: ProviderHandler<'sendMessageDelayed'> = async (ctx, re
         amount,
         bounce,
         payload,
-        stateInit: undefined,
+        stateInit,
         timeout: 60, // TEMP
       },
       new AccountsStorageContext(clock, connectionController, nekoton, keystore),

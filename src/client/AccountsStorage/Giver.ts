@@ -69,7 +69,10 @@ export class GiverAccount implements Account {
 
   async prepareMessage(args: PrepareMessageParams, ctx: AccountsStorageContext): Promise<nt.SignedMessage> {
     if (args.payload != null) {
-      console.warn('Giver contract does not support payload');
+      throw new Error('Giver contract does not support payload in an internal message');
+    }
+    if (args.stateInit != null) {
+      throw new Error('Giver contract does not support state init in an internal message');
     }
 
     const signer = await ctx.getSigner(this.publicKey);

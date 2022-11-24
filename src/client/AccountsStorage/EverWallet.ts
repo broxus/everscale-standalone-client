@@ -49,9 +49,8 @@ export class EverWalletAccount implements Account {
     return result;
   }
 
-  constructor(address: Address, nonce?: number) {
+  constructor(address: Address) {
     this.address = address;
-    this.nonce = nonce;
   }
 
   async fetchPublicKey(ctx: AccountsStorageContext): Promise<string> {
@@ -71,19 +70,41 @@ export class EverWalletAccount implements Account {
 
     const payload = args.payload ? ctx.encodeInternalInput(args.payload) : '';
 
-    return ctx.createExternalMessage({
-      address: this.address,
-      signer,
-      timeout: args.timeout,
-      abi: EVER_WALLET_ABI,
-      method: 'sendTransaction',
-      params: {
+    let abi: string;
+    let method: string;
+    let params: nt.TokensObject;
+    if (args.stateInit == null) {
+      abi = EVER_WALLET_ABI;
+      method = 'sendTransaction';
+      params = {
         dest: args.recipient,
         value: args.amount,
         bounce: args.bounce,
         flags: 3,
         payload,
-      },
+      };
+    } else {
+      abi = EVER_WALLET_ABI_RAW;
+      method = 'sendTransactionRaw';
+      params = {
+        flags: 3,
+        message: ctx.encodeInternalMessage({
+          dst: args.recipient,
+          bounce: args.bounce,
+          stateInit: args.stateInit,
+          body: payload,
+          amount: args.amount,
+        }),
+      };
+    }
+
+    return ctx.createExternalMessage({
+      address: this.address,
+      signer,
+      timeout: args.timeout,
+      abi,
+      method,
+      params,
       stateInit,
     });
   }
@@ -168,6 +189,22 @@ const EVER_WALLET_ABI = `{
       {"name":"payload","type":"cell"}
     ],
     "outputs": []
+  }],
+  "events": []
+}`;
+
+const EVER_WALLET_ABI_RAW = `{
+  "ABI version": 2,
+  "version": "2.3",
+  "header": ["pubkey", "time", "expire"],
+  "functions": [{
+    "name": "sendTransactionRaw",
+    "inputs": [
+      {"name":"flags","type":"uint8"},
+      {"name":"message","type":"cell"}
+    ],
+    "outputs": [],
+    "id": "0x169e3e11"
   }],
   "events": []
 }`;

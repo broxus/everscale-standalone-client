@@ -63,22 +63,43 @@ export class GenericAccount implements Account {
  */
 export class MsigAccount extends GenericAccount {
   constructor(args: { address: string | Address; publicKey?: string; type: 'SafeMultisig' | 'multisig2' }) {
+    const isNewMultisig = args.type === 'multisig2';
+
     super({
       address: args.address,
       publicKey: args.publicKey,
-      abi: args.type == 'multisig2' ? MSIG2_ABI : MSIG_ABI,
+      abi: isNewMultisig ? MSIG2_ABI : MSIG_ABI,
       prepareMessage: async (args, ctx) => {
+        if (!isNewMultisig && args.stateInit != null) {
+          throw new Error('Old multisig contract does not support state init in an internal message');
+        }
+
         const payload = args.payload ? ctx.encodeInternalInput(args.payload) : '';
-        return {
-          method: 'sendTransaction',
-          params: {
-            dest: args.recipient,
-            value: args.amount,
-            bounce: args.bounce,
-            flags: 3,
-            payload,
-          },
-        };
+
+        if (isNewMultisig && args.stateInit != null) {
+          return {
+            method: 'submitTransaction',
+            params: {
+              dest: args.recipient,
+              value: args.amount,
+              bounce: args.bounce,
+              allBalance: false,
+              payload,
+              stateInit: args.stateInit,
+            } as nt.TokensObject,
+          };
+        } else {
+          return {
+            method: 'sendTransaction',
+            params: {
+              dest: args.recipient,
+              value: args.amount,
+              bounce: args.bounce,
+              flags: 3,
+              payload,
+            } as nt.TokensObject,
+          };
+        }
       },
     });
   }
@@ -113,6 +134,17 @@ const MSIG2_ABI = `{
       {"name":"bounce","type":"bool"},
       {"name":"flags","type":"uint8"},
       {"name":"payload","type":"cell"}
+    ],
+    "outputs": []
+  }, {
+    "name": "submitTransaction",
+    "inputs": [
+      {"name":"dest","type":"address"},
+      {"name":"value","type":"uint128"},
+      {"name":"bounce","type":"bool"},
+      {"name":"allBalance","type":"bool"},
+      {"name":"payload","type":"cell"},
+      {"name":"stateInit","type":"optional(cell)"}
     ],
     "outputs": []
   }],
