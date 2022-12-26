@@ -783,7 +783,7 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
     try {
       if (typeof payload === 'string' || payload == null) {
         const expireAt = ~~(clock.nowMs / 1000) + timeout;
-        return nekoton.createRawExternalMessage(repackedRecipient, stateInit, payload, expireAt);
+        return nekoton.createRawExternalMessage(repackedRecipient, stateInit, payload, ~~expireAt);
       } else {
         return nekoton.createExternalMessageWithoutSignature(
           clock,
@@ -792,7 +792,7 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
           payload.method,
           stateInit,
           payload.params,
-          timeout,
+          ~~timeout,
         );
       }
     } catch (e: any) {
@@ -933,7 +933,7 @@ const sendMessage: ProviderHandler<'sendMessage'> = async (ctx, req) => {
           bounce,
           payload,
           stateInit,
-          timeout,
+          timeout: ~~timeout,
         },
         new AccountsStorageContext(clock, connectionController, nekoton, keystore),
       );
@@ -1072,7 +1072,7 @@ const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, 
         stateInit,
         payload.params,
         publicKey,
-        timeout,
+        ~~timeout,
       );
     } catch (e: any) {
       throw invalidRequest(req, e.toString());
@@ -1165,7 +1165,7 @@ const sendExternalMessageDelayed: ProviderHandler<'sendExternalMessageDelayed'> 
       stateInit,
       payload.params,
       publicKey,
-      properties.message.timeout,
+      ~~properties.message.timeout,
     );
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
