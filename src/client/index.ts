@@ -196,6 +196,10 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     }
   }
 
+  public static setDebugLogger(logger: (...data: any[]) => void) {
+    core.debugLog = logger;
+  }
+
   private constructor(ctx: Context) {
     super();
     this._context = ctx;
@@ -764,11 +768,12 @@ const verifySignature: ProviderHandler<'verifySignature'> = async (_ctx, req) =>
 const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'> = async (ctx, req) => {
   requireParams(req);
 
-  const { recipient, stateInit, payload, local } = req.params;
+  const { recipient, stateInit, payload, local, executorParams } = req.params;
   requireString(req, req.params, 'recipient');
   requireOptionalString(req, req.params, 'stateInit');
   requireOptionalRawFunctionCall(req, req.params, 'payload');
   requireOptionalBoolean(req, req.params, 'local');
+  requireOptionalObject(req, req.params, 'executorParams');
 
   let repackedRecipient: string;
   try {
@@ -817,7 +822,11 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
   // Force local execution
   if (local === true) {
     const signedMessage = makeSignedMessage(60);
-    const transaction = await subscriptionController.sendMessageLocally(repackedRecipient, signedMessage);
+    const transaction = await subscriptionController.sendMessageLocally(
+      repackedRecipient,
+      signedMessage,
+      executorParams,
+    );
     return handleTransaction(transaction);
   }
 
@@ -1041,12 +1050,13 @@ const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, 
   requireKeystore(req, ctx);
   requireParams(req);
 
-  const { publicKey, recipient, stateInit, payload, local } = req.params;
+  const { publicKey, recipient, stateInit, payload, local, executorParams } = req.params;
   requireString(req, req.params, 'publicKey');
   requireString(req, req.params, 'recipient');
   requireOptionalString(req, req.params, 'stateInit');
   requireFunctionCall(req, req.params, 'payload');
   requireOptionalBoolean(req, req.params, 'local');
+  requireOptionalObject(req, req.params, 'executorParams');
 
   let repackedRecipient: string;
   try {
@@ -1103,7 +1113,11 @@ const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, 
   // Force local execution
   if (local === true) {
     const signedMessage = await makeSignedMessage(60);
-    const transaction = await subscriptionController.sendMessageLocally(repackedRecipient, signedMessage);
+    const transaction = await subscriptionController.sendMessageLocally(
+      repackedRecipient,
+      signedMessage,
+      executorParams,
+    );
     return handleTransaction(transaction);
   }
 

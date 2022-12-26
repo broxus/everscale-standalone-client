@@ -25,7 +25,11 @@ export class SubscriptionController {
     this._notify = notify;
   }
 
-  public async sendMessageLocally(address: string, signedMessage: nt.SignedMessage): Promise<nt.Transaction> {
+  public async sendMessageLocally(
+    address: string,
+    signedMessage: nt.SignedMessage,
+    params?: nt.ExecutorParams,
+  ): Promise<nt.Transaction> {
     const subscriptionId = getUniqueId();
     try {
       await this.subscribeToContract(address, { state: true }, subscriptionId);
@@ -34,7 +38,7 @@ export class SubscriptionController {
         throw new Error('Failed to subscribe to contract');
       }
 
-      return await subscription.use(contract => contract.sendMessageLocally(signedMessage));
+      return await subscription.use(contract => contract.sendMessageLocally(signedMessage, params));
     } finally {
       this.unsubscribeFromContract(address, subscriptionId).catch(console.error);
     }
