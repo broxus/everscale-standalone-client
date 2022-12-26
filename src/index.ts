@@ -16,6 +16,8 @@ core.ensureNekotonLoaded = (initInput?: nt.InitInput | Promise<nt.InitInput>): P
 };
 core.nekoton = nt;
 core.fetch = fetch;
-core.debugLog = console.debug;
+core.debugLog = _nothing => {
+  /* do nothing */
+};
 
 export * from './client';
