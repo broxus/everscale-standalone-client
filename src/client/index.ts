@@ -28,7 +28,7 @@ export type ClientProperties = {
   /**
    * Connection properties or network preset name
    */
-  connection: ConnectionProperties;
+  connection?: ConnectionProperties;
   /**
    * Keystore which will be used for all methods with `accountInteraction`
    */
@@ -151,7 +151,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     sendExternalMessageDelayed,
   };
 
-  public static async create(params: ClientProperties): Promise<EverscaleStandaloneClient> {
+  public static async create(params: ClientProperties = {}): Promise<EverscaleStandaloneClient> {
     await ensureNekotonLoaded(params.initInput);
 
     // NOTE: capture client inside notify using wrapper object
@@ -168,8 +168,10 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     }
 
     try {
-      const connectionController = await createConnectionController(clock, params.connection);
-      const subscriptionController = new SubscriptionController(connectionController, notify);
+      const connectionController =
+        params.connection != null ? await createConnectionController(clock, params.connection) : undefined;
+      const subscriptionController =
+        connectionController != null ? new SubscriptionController(connectionController, notify) : undefined;
 
       const client = new EverscaleStandaloneClient({
         permissions: {},
@@ -252,8 +254,8 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
 
 type Context = {
   permissions: Partial<ever.RawPermissions>;
-  connectionController: ConnectionController;
-  subscriptionController: SubscriptionController;
+  connectionController?: ConnectionController;
+  subscriptionController?: SubscriptionController;
   properties: Properties;
   keystore?: Keystore;
   accountsStorage?: AccountsStorage;
@@ -320,13 +322,14 @@ const changeAccount: ProviderHandler<'changeAccount'> = async (ctx, req) => {
 
 const disconnect: ProviderHandler<'disconnect'> = async (ctx, _req) => {
   ctx.permissions = {};
-  await ctx.subscriptionController.unsubscribeFromAllContracts();
+  await ctx.subscriptionController?.unsubscribeFromAllContracts();
   ctx.notify('permissionsChanged', { permissions: {} });
   return undefined;
 };
 
 const subscribe: ProviderHandler<'subscribe'> = async (ctx, req) => {
   requireParams(req);
+  requireConnection(req, ctx);
 
   const { address, subscriptions } = req.params;
   requireString(req, req.params, 'address');
@@ -348,6 +351,7 @@ const subscribe: ProviderHandler<'subscribe'> = async (ctx, req) => {
 
 const unsubscribe: ProviderHandler<'unsubscribe'> = async (ctx, req) => {
   requireParams(req);
+  requireConnection(req, ctx);
 
   const { address } = req.params;
   requireString(req, req.params, 'address');
@@ -364,31 +368,29 @@ const unsubscribe: ProviderHandler<'unsubscribe'> = async (ctx, req) => {
 };
 
 const unsubscribeAll: ProviderHandler<'unsubscribeAll'> = async (ctx, _req) => {
-  await ctx.subscriptionController.unsubscribeFromAllContracts();
+  await ctx.subscriptionController?.unsubscribeFromAllContracts();
   return undefined;
 };
 
-const getProviderState: ProviderHandler<'getProviderState'> = async (ctx, req) => {
-  const transport = ctx.connectionController.initializedTransport;
-  if (transport == null) {
-    throw invalidRequest(req, 'Connection controller was not initialized');
-  }
+const getProviderState: ProviderHandler<'getProviderState'> = async (ctx, _req) => {
+  const transport = ctx.connectionController?.initializedTransport;
 
   const version = VERSION;
 
   return {
     version,
     numericVersion: convertVersionToInt32(version),
-    networkId: transport.id,
-    selectedConnection: transport.group,
+    networkId: transport != null ? transport.id : 0,
+    selectedConnection: transport != null ? transport.group : '',
     supportedPermissions: [...SUPPORTED_PERMISSIONS],
     permissions: JSON.parse(JSON.stringify(ctx.permissions)),
-    subscriptions: ctx.subscriptionController.subscriptionStates,
+    subscriptions: ctx.subscriptionController?.subscriptionStates || {},
   };
 };
 
 const getFullContractState: ProviderHandler<'getFullContractState'> = async (ctx, req) => {
   requireParams(req);
+  requireConnection(req, ctx);
 
   const { address } = req.params;
   requireString(req, req.params, 'address');
@@ -406,6 +408,7 @@ const getFullContractState: ProviderHandler<'getFullContractState'> = async (ctx
 
 const getAccountsByCodeHash: ProviderHandler<'getAccountsByCodeHash'> = async (ctx, req) => {
   requireParams(req);
+  requireConnection(req, ctx);
 
   const { codeHash, limit, continuation } = req.params;
   requireString(req, req.params, 'codeHash');
@@ -425,6 +428,7 @@ const getAccountsByCodeHash: ProviderHandler<'getAccountsByCodeHash'> = async (c
 
 const getTransactions: ProviderHandler<'getTransactions'> = async (ctx, req) => {
   requireParams(req);
+  requireConnection(req, ctx);
 
   const { address, continuation, limit } = req.params;
   requireString(req, req.params, 'address');
@@ -444,6 +448,7 @@ const getTransactions: ProviderHandler<'getTransactions'> = async (ctx, req) => 
 
 const getTransaction: ProviderHandler<'getTransaction'> = async (ctx, req) => {
   requireParams(req);
+  requireConnection(req, ctx);
 
   const { hash } = req.params;
   requireString(req, req.params, 'hash');
@@ -461,6 +466,7 @@ const getTransaction: ProviderHandler<'getTransaction'> = async (ctx, req) => {
 
 const findTransaction: ProviderHandler<'findTransaction'> = async (ctx, req) => {
   requireParams(req);
+  requireConnection(req, ctx);
 
   const { inMessageHash } = req.params;
   requireOptional(req, req.params, 'inMessageHash', requireString);
@@ -494,11 +500,10 @@ const runLocal: ProviderHandler<'runLocal'> = async (ctx, req) => {
   requireOptionalBoolean(req, req.params, 'responsible');
   requireFunctionCall(req, req.params, 'functionCall');
 
-  const { clock, connectionController } = ctx;
-
   let contractState = cachedState;
   if (contractState == null) {
-    contractState = await connectionController.use(async ({ data: { transport } }) =>
+    requireConnection(req, ctx);
+    contractState = await ctx.connectionController.use(async ({ data: { transport } }) =>
       transport.getFullContractState(address),
     );
   }
@@ -512,7 +517,7 @@ const runLocal: ProviderHandler<'runLocal'> = async (ctx, req) => {
 
   try {
     const { output, code } = nekoton.runLocal(
-      clock,
+      ctx.clock,
       contractState.boc,
       functionCall.abi,
       functionCall.method,
@@ -767,6 +772,7 @@ const verifySignature: ProviderHandler<'verifySignature'> = async (_ctx, req) =>
 
 const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'> = async (ctx, req) => {
   requireParams(req);
+  requireConnection(req, ctx);
 
   const { recipient, stateInit, payload, local, executorParams } = req.params;
   requireString(req, req.params, 'recipient');
@@ -904,6 +910,7 @@ const signDataRaw: ProviderHandler<'signDataRaw'> = async (ctx, req) => {
 const sendMessage: ProviderHandler<'sendMessage'> = async (ctx, req) => {
   requireKeystore(req, ctx);
   requireAccountsStorage(req, ctx);
+  requireConnection(req, ctx);
   requireParams(req);
 
   const { sender, recipient, amount, bounce, payload, stateInit } = req.params;
@@ -984,6 +991,7 @@ const sendMessageDelayed: ProviderHandler<'sendMessageDelayed'> = async (ctx, re
   requireKeystore(req, ctx);
   requireAccountsStorage(req, ctx);
   requireParams(req);
+  requireConnection(req, ctx);
 
   const { sender, recipient, amount, bounce, payload, stateInit } = req.params;
   requireString(req, req.params, 'sender');
@@ -1049,6 +1057,7 @@ const sendMessageDelayed: ProviderHandler<'sendMessageDelayed'> = async (ctx, re
 const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, req) => {
   requireKeystore(req, ctx);
   requireParams(req);
+  requireConnection(req, ctx);
 
   const { publicKey, recipient, stateInit, payload, local, executorParams } = req.params;
   requireString(req, req.params, 'publicKey');
@@ -1149,6 +1158,7 @@ const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, 
 const sendExternalMessageDelayed: ProviderHandler<'sendExternalMessageDelayed'> = async (ctx, req) => {
   requireKeystore(req, ctx);
   requireParams(req);
+  requireConnection(req, ctx);
 
   const { publicKey, recipient, stateInit, payload } = req.params;
   requireString(req, req.params, 'publicKey');
@@ -1227,6 +1237,18 @@ function requireAccountsStorage(
 ): asserts context is Context & { accountsStorage: AccountsStorage } {
   if (context.accountsStorage == null) {
     throw invalidRequest(req, 'AccountsStorage not found');
+  }
+}
+
+function requireConnection(
+  req: any,
+  context: Context,
+): asserts context is Context & {
+  connectionController: ConnectionController;
+  subscriptionController: SubscriptionController;
+} {
+  if (context.connectionController == null || context.subscriptionController == null) {
+    throw invalidRequest(req, 'Connection was not initialized');
   }
 }
 
@@ -1400,6 +1422,8 @@ async function makeAccountInteractionPermission(
   ctx: Context,
 ): Promise<ever.Permissions<string>['accountInteraction']> {
   requireAccountsStorage(req, ctx);
+  requireConnection(req, ctx);
+
   const defaultAccount = ctx.accountsStorage.defaultAccount;
   if (defaultAccount == null) {
     throw invalidRequest(req, 'Default account not set in accounts storage');
