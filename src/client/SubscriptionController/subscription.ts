@@ -75,6 +75,8 @@ export class ContractSubscription {
       this._isRunning = true;
       let previousPollingMethod = this._currentPollingMethod;
       while (this._isRunning) {
+        this._skipIteration = false; // always reset this flag
+
         const pollingMethodChanged = previousPollingMethod != this._currentPollingMethod;
         previousPollingMethod = this._currentPollingMethod;
 
@@ -97,7 +99,6 @@ export class ContractSubscription {
           debugLog('ContractSubscription -> manual -> waiting ends');
 
           if (this._skipIteration) {
-            this._skipIteration = false;
             continue;
           }
 
