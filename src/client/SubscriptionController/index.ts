@@ -66,7 +66,7 @@ export class SubscriptionController {
           await subscription.prepareReliablePolling();
           await subscription.use(async contract => {
             await contract.sendMessage(signedMessage);
-            subscription.skipRefreshTimer();
+            subscription.skipRefreshTimer(contract.pollingMethod);
           });
         })
         .catch((e: any) => this._rejectMessageRequest(address, id, e))

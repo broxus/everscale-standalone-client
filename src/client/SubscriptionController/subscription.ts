@@ -19,6 +19,7 @@ export class ContractSubscription {
   private _isRunning = false;
   private _currentBlockId?: string;
   private _suggestedBlockId?: string;
+  private _skipIteration = false;
 
   public static async subscribe(
     connectionController: ConnectionController,
@@ -95,6 +96,11 @@ export class ContractSubscription {
 
           debugLog('ContractSubscription -> manual -> waiting ends');
 
+          if (this._skipIteration) {
+            this._skipIteration = false;
+            continue;
+          }
+
           if (!this._isRunning) {
             break;
           }
@@ -159,7 +165,11 @@ export class ContractSubscription {
     })();
   }
 
-  public skipRefreshTimer() {
+  public skipRefreshTimer(pollingMethod?: nt.PollingMethod) {
+    if (pollingMethod != null) {
+      this._currentPollingMethod = pollingMethod;
+      this._skipIteration = true;
+    }
     clearTimeout(this._refreshTimer?.[0]);
     this._refreshTimer?.[1]();
     this._refreshTimer = undefined;
