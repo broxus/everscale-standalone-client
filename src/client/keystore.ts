@@ -27,7 +27,7 @@ export interface Signer {
    * Sign data as is and return a signature
    * @param rawData - hex or base64 encoded data
    */
-  sign(rawData: string): Promise<string>;
+  sign(rawData: string, signatureId?: number): Promise<string>;
 }
 
 /**
@@ -121,7 +121,7 @@ class SimpleSigner implements Signer {
 
   readonly publicKey: string = this.keyPair.publicKey;
 
-  async sign(rawData: string): Promise<string> {
-    return nekoton.ed25519_sign(this.keyPair.secretKey, rawData);
+  async sign(rawData: string, signatureId?: number): Promise<string> {
+    return nekoton.ed25519_sign(this.keyPair.secretKey, rawData, signatureId);
   }
 }

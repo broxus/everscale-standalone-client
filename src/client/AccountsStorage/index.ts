@@ -80,6 +80,10 @@ export type PrepareMessageParams = {
    * External message timeout
    */
   timeout: number;
+  /**
+   * Signature id for the current network
+   */
+  signatureId?: number;
 };
 
 /**
@@ -174,6 +178,7 @@ export class AccountsStorageContext {
     method: string;
     params: nt.TokensObject;
     stateInit?: string;
+    signatureId?: number;
   }): Promise<nt.SignedMessage> {
     const unsignedMessage = this.nekoton.createExternalMessage(
       this.clock,
@@ -187,7 +192,7 @@ export class AccountsStorageContext {
     );
 
     try {
-      const signature = await args.signer.sign(unsignedMessage.hash);
+      const signature = await args.signer.sign(unsignedMessage.hash, args.signatureId);
       return unsignedMessage.sign(signature);
     } finally {
       unsignedMessage.free();

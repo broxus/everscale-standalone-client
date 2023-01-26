@@ -72,7 +72,7 @@ export class WalletV3Account implements Account {
 
     const unsignedPayload = ctx.packIntoCell({ structure: UNSIGNED_TRANSFER_STRUCTURE, data: params });
     const hash = ctx.getBocHash(unsignedPayload);
-    const signature = await signer.sign(hash);
+    const signature = await signer.sign(hash, args.signatureId);
     const { signatureParts } = ctx.extendSignature(signature);
 
     params.signatureHigh = signatureParts.high;

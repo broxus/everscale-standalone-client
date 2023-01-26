@@ -755,16 +755,19 @@ const decodeTransactionEvents: ProviderHandler<'decodeTransactionEvents'> = asyn
   }
 };
 
-const verifySignature: ProviderHandler<'verifySignature'> = async (_ctx, req) => {
+const verifySignature: ProviderHandler<'verifySignature'> = async (ctx, req) => {
   requireParams(req);
 
-  const { publicKey, dataHash, signature } = req.params;
+  const { publicKey, dataHash, signature, withSignatureId } = req.params;
   requireString(req, req.params, 'publicKey');
   requireString(req, req.params, 'dataHash');
   requireString(req, req.params, 'signature');
+  requireOptionalSignatureId(req, req.params, 'withSignatureId');
+
+  const signatureId = await computeSignatureId(req, ctx, withSignatureId);
 
   try {
-    return { isValid: nekoton.verifySignature(publicKey, dataHash, signature) };
+    return { isValid: nekoton.verifySignature(publicKey, dataHash, signature, signatureId) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -865,9 +868,12 @@ const signData: ProviderHandler<'signData'> = async (ctx, req) => {
   requireKeystore(req, ctx);
   requireParams(req);
 
-  const { publicKey, data } = req.params;
+  const { publicKey, data, withSignatureId } = req.params;
   requireString(req, req.params, 'publicKey');
   requireString(req, req.params, 'data');
+  requireOptionalSignatureId(req, req.params, 'withSignatureId');
+
+  const signatureId = await computeSignatureId(req, ctx, withSignatureId);
 
   const { keystore } = ctx;
   const signer = await keystore.getSigner(publicKey);
@@ -879,7 +885,7 @@ const signData: ProviderHandler<'signData'> = async (ctx, req) => {
     const dataHash = nekoton.getDataHash(data);
     return {
       dataHash,
-      ...(await signer.sign(dataHash).then(nekoton.extendSignature)),
+      ...(await signer.sign(dataHash, signatureId).then(nekoton.extendSignature)),
     };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
@@ -890,9 +896,12 @@ const signDataRaw: ProviderHandler<'signDataRaw'> = async (ctx, req) => {
   requireKeystore(req, ctx);
   requireParams(req);
 
-  const { publicKey, data } = req.params;
+  const { publicKey, data, withSignatureId } = req.params;
   requireString(req, req.params, 'publicKey');
   requireString(req, req.params, 'data');
+  requireOptionalSignatureId(req, req.params, 'withSignatureId');
+
+  const signatureId = await computeSignatureId(req, ctx, withSignatureId);
 
   const { keystore } = ctx;
   const signer = await keystore.getSigner(publicKey);
@@ -901,7 +910,7 @@ const signDataRaw: ProviderHandler<'signDataRaw'> = async (ctx, req) => {
   }
 
   try {
-    return await signer.sign(data).then(nekoton.extendSignature);
+    return await signer.sign(data, signatureId).then(nekoton.extendSignature);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -920,6 +929,8 @@ const sendMessage: ProviderHandler<'sendMessage'> = async (ctx, req) => {
   requireBoolean(req, req.params, 'bounce');
   requireOptional(req, req.params, 'payload', requireFunctionCall);
   requireOptionalString(req, req.params, 'stateInit');
+
+  const signatureId = await computeSignatureId(req, ctx);
 
   const { clock, properties, subscriptionController, connectionController, keystore, accountsStorage } = ctx;
 
@@ -950,6 +961,7 @@ const sendMessage: ProviderHandler<'sendMessage'> = async (ctx, req) => {
           payload,
           stateInit,
           timeout: ~~timeout,
+          signatureId,
         },
         new AccountsStorageContext(clock, connectionController, nekoton, keystore),
       );
@@ -1001,6 +1013,8 @@ const sendMessageDelayed: ProviderHandler<'sendMessageDelayed'> = async (ctx, re
   requireOptional(req, req.params, 'payload', requireFunctionCall);
   requireOptionalString(req, req.params, 'stateInit');
 
+  const signatureId = await computeSignatureId(req, ctx);
+
   const { clock, subscriptionController, connectionController, keystore, accountsStorage, notify } = ctx;
 
   let repackedSender: string;
@@ -1027,6 +1041,7 @@ const sendMessageDelayed: ProviderHandler<'sendMessageDelayed'> = async (ctx, re
         payload,
         stateInit,
         timeout: 60, // TEMP
+        signatureId,
       },
       new AccountsStorageContext(clock, connectionController, nekoton, keystore),
     );
@@ -1067,6 +1082,8 @@ const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, 
   requireOptionalBoolean(req, req.params, 'local');
   requireOptionalObject(req, req.params, 'executorParams');
 
+  const signatureId = await computeSignatureId(req, ctx);
+
   let repackedRecipient: string;
   try {
     repackedRecipient = nekoton.repackAddress(recipient);
@@ -1098,7 +1115,7 @@ const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, 
     }
 
     try {
-      const signature = await signer.sign(unsignedMessage.hash);
+      const signature = await signer.sign(unsignedMessage.hash, signatureId);
       return unsignedMessage.sign(signature);
     } catch (e: any) {
       throw invalidRequest(req, e.toString());
@@ -1166,6 +1183,8 @@ const sendExternalMessageDelayed: ProviderHandler<'sendExternalMessageDelayed'> 
   requireOptionalString(req, req.params, 'stateInit');
   requireFunctionCall(req, req.params, 'payload');
 
+  const signatureId = await computeSignatureId(req, ctx);
+
   let repackedRecipient: string;
   try {
     repackedRecipient = nekoton.repackAddress(recipient);
@@ -1197,7 +1216,7 @@ const sendExternalMessageDelayed: ProviderHandler<'sendExternalMessageDelayed'> 
 
   let signedMessage: nt.SignedMessage;
   try {
-    const signature = await signer.sign(unsignedMessage.hash);
+    const signature = await signer.sign(unsignedMessage.hash, signatureId);
     signedMessage = unsignedMessage.sign(signature);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
@@ -1250,6 +1269,26 @@ function requireConnection(
   if (context.connectionController == null || context.subscriptionController == null) {
     throw invalidRequest(req, 'Connection was not initialized');
   }
+}
+
+async function computeSignatureId(
+  req: any,
+  ctx: Context,
+  withSignatureId?: boolean | number,
+): Promise<number | undefined> {
+  if (withSignatureId === false) {
+    return undefined;
+  } else if (typeof withSignatureId === 'number') {
+    return withSignatureId;
+  } else if (ctx.connectionController == null) {
+    return undefined;
+  }
+
+  return ctx.connectionController
+    .use(async ({ data: { transport } }) => transport.getSignatureId())
+    .catch(_ => {
+      throw invalidRequest(req, 'Failed to fetch signature id');
+    });
 }
 
 function requireParams<T extends ever.ProviderMethod>(req: any): asserts req is ever.RawProviderRequest<T> {
@@ -1339,6 +1378,19 @@ function requireOptional<O, P extends keyof O>(
   const property = object[key];
   if (property != null) {
     predicate(req, object, key);
+  }
+}
+
+function requireOptionalSignatureId<O, P extends keyof O>(
+  req: ever.RawProviderRequest<ever.ProviderMethod>,
+  object: O,
+  key: P,
+) {
+  const property = object[key];
+  if (property != null) {
+    if (typeof property !== 'boolean' || typeof property !== 'number') {
+      throw invalidRequest(req, `'${String(key)}' must be an optional boolean or number`);
+    }
   }
 }
 
