@@ -2,6 +2,7 @@ import type * as nt from 'nekoton-wasm';
 import { Address } from 'everscale-inpage-provider';
 
 import { Account, PrepareMessageParams, AccountsStorageContext } from './';
+import { convertToAddressObject } from '../utils';
 
 /**
  * @category AccountsStorage
@@ -59,7 +60,7 @@ export class GiverAccount implements Account {
   }
 
   constructor(args: { address: string | Address; publicKey: string }) {
-    this.address = args.address instanceof Address ? args.address : new Address(args.address);
+    this.address = convertToAddressObject(args.address);
     this.publicKey = args.publicKey;
   }
 

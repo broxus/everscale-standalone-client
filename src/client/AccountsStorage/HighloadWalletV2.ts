@@ -4,6 +4,7 @@ import BigNumber from 'bignumber.js';
 
 import core from '../../core';
 import { Account, PrepareMessageParams, AccountsStorageContext } from './';
+import { convertToAddressObject } from '../utils';
 
 const { ensureNekotonLoaded, nekoton } = core;
 
@@ -33,7 +34,7 @@ export class HighloadWalletV2 implements Account {
   }
 
   constructor(address: string | Address) {
-    this.address = address instanceof Address ? address : new Address(address);
+    this.address = convertToAddressObject(address);
   }
 
   async fetchPublicKey(ctx: AccountsStorageContext): Promise<string> {

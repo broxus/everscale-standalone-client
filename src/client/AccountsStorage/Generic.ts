@@ -2,6 +2,7 @@ import type * as nt from 'nekoton-wasm';
 import { Address, TokensObject } from 'everscale-inpage-provider';
 
 import { Account, PrepareMessageParams, AccountsStorageContext } from './';
+import { convertToAddressObject } from '../utils';
 
 type GenericAccountCall = {
   method: string;
@@ -26,7 +27,7 @@ export class GenericAccount implements Account {
     prepareMessage: PrepareMessage;
     publicKey?: string;
   }) {
-    this.address = args.address instanceof Address ? args.address : new Address(args.address);
+    this.address = convertToAddressObject(args.address);
     this.abi = typeof args.abi === 'string' ? args.abi : JSON.stringify(args.abi);
     this.prepareMessageImpl = args.prepareMessage;
     this.publicKey = args.publicKey;

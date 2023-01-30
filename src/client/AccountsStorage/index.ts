@@ -4,6 +4,7 @@ import type * as nt from 'nekoton-wasm';
 
 import { Keystore, Signer } from '../keystore';
 import { ConnectionController } from '../ConnectionController';
+import { convertToAddressObject } from '../utils';
 
 export { GiverAccount } from './Giver';
 export { GenericAccount, MsigAccount } from './Generic';
@@ -234,13 +235,7 @@ export class SimpleAccountsStorage implements AccountsStorage {
     }
 
     if (args.defaultAccount != null) {
-      let defaultAccount: Address;
-      if (args.defaultAccount instanceof Address) {
-        defaultAccount = args.defaultAccount;
-      } else {
-        defaultAccount = new Address(args.defaultAccount);
-      }
-
+      const defaultAccount: Address = convertToAddressObject(args.defaultAccount);
       if (!this.accounts.has(defaultAccount.toString())) {
         throw new Error('Provided default account not found in storage');
       }
@@ -257,7 +252,7 @@ export class SimpleAccountsStorage implements AccountsStorage {
     if (address != null && !this.accounts.has(address)) {
       throw new Error('Account not found in storage');
     }
-    this._defaultAccount = value == null || value instanceof Address ? value : new Address(value);
+    this._defaultAccount = value == null ? value : convertToAddressObject(value);
   }
 
   public async getAccount(address: string | Address): Promise<Account | undefined> {

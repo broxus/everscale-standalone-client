@@ -1,16 +1,13 @@
+import { Address, isAddressObject } from 'everscale-inpage-provider';
 import { EventEmitter } from 'events';
 
-type Handler = (...args: any[]) => void
+type Handler = (...args: any[]) => void;
 
 interface EventMap {
   [k: string]: Handler | Handler[] | undefined;
 }
 
-function safeApply<T, A extends any[]>(
-  handler: (this: T, ...args: A) => void,
-  context: T,
-  args: A,
-): void {
+function safeApply<T, A extends any[]>(handler: (this: T, ...args: A) => void, context: T, args: A): void {
   try {
     Reflect.apply(handler, context, args);
   } catch (err) {
@@ -73,6 +70,13 @@ export class SafeEventEmitter extends EventEmitter {
 
     return true;
   }
+}
+
+export function convertToAddressObject(address: string | Address): Address {
+  if (typeof address === 'object' && !isAddressObject(address)) {
+    throw new Error('Invalid address object');
+  }
+  return typeof address === 'object' ? address : new Address(address);
 }
 
 /**
