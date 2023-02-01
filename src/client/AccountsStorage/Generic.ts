@@ -55,6 +55,7 @@ export class GenericAccount implements Account {
       method,
       params,
       stateInit,
+      signatureId: args.signatureId,
     });
   }
 }

@@ -106,6 +106,7 @@ export class EverWalletAccount implements Account {
       method,
       params,
       stateInit,
+      signatureId: args.signatureId,
     });
   }
 
