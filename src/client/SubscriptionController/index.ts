@@ -202,24 +202,20 @@ export class SubscriptionController {
         this._controller = controller;
       }
 
-      public enabledNotifications() {
+      public enableNotifications() {
         this._enabled = true;
       }
 
       onMessageExpired(pendingTransaction: nt.PendingTransaction) {
-        if (this._enabled) {
-          this._controller
-            ._resolveMessageRequest(this._address, pendingTransaction.messageHash, undefined)
-            .catch(console.error);
-        }
+        this._controller
+          ._resolveMessageRequest(this._address, pendingTransaction.messageHash, undefined)
+          .catch(console.error);
       }
 
       onMessageSent(pendingTransaction: nt.PendingTransaction, transaction: nt.Transaction) {
-        if (this._enabled) {
-          this._controller
-            ._resolveMessageRequest(this._address, pendingTransaction.messageHash, transaction)
-            .catch(console.error);
-        }
+        this._controller
+          ._resolveMessageRequest(this._address, pendingTransaction.messageHash, transaction)
+          .catch(console.error);
       }
 
       onStateChanged(newState: nt.ContractState) {
@@ -239,7 +235,7 @@ export class SubscriptionController {
 
     const subscription = await ContractSubscription.subscribe(this._connectionController, address, handler);
     subscription.setPollingInterval(DEFAULT_POLLING_INTERVAL);
-    handler.enabledNotifications();
+    handler.enableNotifications();
 
     this._subscriptions.set(address, subscription);
 

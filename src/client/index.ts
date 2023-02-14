@@ -1388,7 +1388,7 @@ function requireOptionalSignatureId<O, P extends keyof O>(
 ) {
   const property = object[key];
   if (property != null) {
-    if (typeof property !== 'boolean' || typeof property !== 'number') {
+    if (typeof property !== 'boolean' && typeof property !== 'number') {
       throw invalidRequest(req, `'${String(key)}' must be an optional boolean or number`);
     }
   }
