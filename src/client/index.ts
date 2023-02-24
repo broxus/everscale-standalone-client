@@ -121,6 +121,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     getTransaction,
     findTransaction,
     runLocal,
+    executeLocal,
     getExpectedAddress,
     getBocHash,
     packIntoCell,
@@ -525,6 +526,148 @@ const runLocal: ProviderHandler<'runLocal'> = async (ctx, req) => {
       responsible || false,
     );
     return { output, code };
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
+const executeLocal: ProviderHandler<'executeLocal'> = async (ctx, req) => {
+  requireParams(req);
+  requireConnection(req, ctx);
+
+  const { address, cachedState, stateInit, payload, executorParams, messageHeader } = req.params;
+  requireString(req, req.params, 'address');
+  requireOptional(req, req.params, 'cachedState', requireContractState);
+  requireOptionalString(req, req.params, 'stateInit');
+  requireOptionalRawFunctionCall(req, req.params, 'payload');
+  requireOptionalObject(req, req.params, 'executorParams');
+  requireObject(req, req.params, 'messageHeader');
+
+  const { clock, connectionController } = ctx;
+
+  let repackedAddress: string;
+  try {
+    repackedAddress = nekoton.repackAddress(address);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+
+  const now = ~~(clock.nowMs / 1000);
+  const timeout = 60;
+
+  let message: string;
+  if (messageHeader.type === 'external') {
+    if (payload == null || typeof payload === 'string') {
+      message = nekoton.createRawExternalMessage(repackedAddress, stateInit, payload, now + timeout).boc;
+    } else if (messageHeader.withoutSignature === true) {
+      message = nekoton.createExternalMessageWithoutSignature(
+        clock,
+        repackedAddress,
+        payload.abi,
+        payload.method,
+        stateInit,
+        payload.params,
+        timeout,
+      ).boc;
+    } else {
+      let unsignedMessage = nekoton.createExternalMessage(
+        clock,
+        repackedAddress,
+        payload.abi,
+        payload.method,
+        stateInit,
+        payload.params,
+        messageHeader.publicKey,
+        timeout,
+      );
+
+      try {
+        if (executorParams?.disableSignatureCheck === true) {
+          message = unsignedMessage.signFake().boc;
+        } else {
+          requireKeystore(req, ctx);
+          const signatureId = await computeSignatureId(req, ctx);
+
+          const { keystore } = ctx;
+
+          const signer = await keystore.getSigner(messageHeader.publicKey);
+          if (signer == null) {
+            throw 'Signer not found for public key';
+          }
+
+          const signature = await signer.sign(unsignedMessage.hash, signatureId);
+          message = unsignedMessage.sign(signature).boc;
+        }
+      } catch (e: any) {
+        throw invalidRequest(req, e.toString());
+      } finally {
+        unsignedMessage.free();
+      }
+    }
+  } else if (messageHeader.type === 'internal') {
+    requireString(req, messageHeader, 'sender');
+    requireString(req, messageHeader, 'amount');
+    requireBoolean(req, messageHeader, 'bounce');
+    requireOptionalBoolean(req, messageHeader, 'bounced');
+
+    const body = payload == null ?
+      undefined
+      : typeof payload === 'string'
+        ? payload
+        : nekoton.encodeInternalInput(payload.abi, payload.method, payload.params);
+
+    message = nekoton.encodeInternalMessage(
+      messageHeader.sender,
+      repackedAddress,
+      messageHeader.bounce,
+      stateInit,
+      body,
+      messageHeader.amount,
+    );
+  } else {
+    throw invalidRequest(req, 'Unknown message type');
+  }
+
+  try {
+    const [contractState, blockchainConfig] = await connectionController.use(({ data: { transport } }) => Promise.all([
+      cachedState == null ? transport.getFullContractState(repackedAddress) : cachedState,
+      transport.getBlockchainConfig(),
+    ]));
+
+    const account = nekoton.makeFullAccountBoc(contractState?.boc);
+    const overrideBalance = executorParams?.overrideBalance;
+
+    const result = nekoton.executeLocal(
+      blockchainConfig,
+      account,
+      message,
+      now,
+      executorParams?.disableSignatureCheck === true,
+      overrideBalance != null ? overrideBalance.toString() : undefined,
+    );
+    if ((result as any).exitCode != null) {
+      throw new Error(`Contract did not accept the message. Exit code: ${(result as any).exitCode}`);
+    }
+
+    const resultVariant = result as { account: string, transaction: nt.Transaction };
+    const transaction = resultVariant.transaction;
+    const newState = nekoton.parseFullAccountBoc(resultVariant.account);
+
+    let output: ever.RawTokensObject | undefined;
+    try {
+      if (typeof payload === 'object' && typeof payload != null) {
+        const decoded = nekoton.decodeTransaction(resultVariant.transaction, payload.abi, payload.method);
+        output = decoded?.output;
+      }
+    } catch (_) {
+      /* do nothing */
+    }
+
+    return {
+      transaction,
+      newState,
+      output,
+    };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
