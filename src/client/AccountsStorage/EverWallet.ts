@@ -28,8 +28,7 @@ export class EverWalletAccount implements Account {
     await ensureNekotonLoaded();
 
     const publicKey = args.publicKey instanceof BigNumber ? args.publicKey : new BigNumber(`0x${args.publicKey}`);
-    const tvc = makeStateInit(publicKey, args.nonce);
-    const hash = nekoton.getBocHash(tvc);
+    const hash = makeStateInit(publicKey, args.nonce).hash;
     return new Address(`${args.workchain != null ? args.workchain : 0}:${hash}`);
   }
 
@@ -123,7 +122,7 @@ export class EverWalletAccount implements Account {
           throw new Error('Contract not deployed and public key was not specified');
         }
 
-        stateInit = makeStateInit(this.publicKey, this.nonce);
+        stateInit = makeStateInit(this.publicKey, this.nonce).boc;
         publicKey = this.publicKey;
       } else {
         this.isDeployed = true;
@@ -142,7 +141,7 @@ export class EverWalletAccount implements Account {
   }
 }
 
-const makeStateInit = (publicKey: BigNumber, nonce?: number) => {
+const makeStateInit = (publicKey: BigNumber, nonce?: number): { boc: string, hash: string } => {
   let params: nt.AbiParam[], tokens: nt.TokensObject;
   if (nonce != null) {
     params = DATA_STRUCTURE_EXT;
@@ -159,7 +158,7 @@ const makeStateInit = (publicKey: BigNumber, nonce?: number) => {
     };
   }
 
-  const data = nekoton.packIntoCell(params, tokens);
+  const data = nekoton.packIntoCell(params, tokens).boc;
   return nekoton.mergeTvc(EVER_WALLET_CODE, data);
 };
 

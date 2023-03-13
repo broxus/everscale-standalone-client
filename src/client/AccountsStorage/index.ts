@@ -96,7 +96,8 @@ export class AccountsStorageContext {
     private readonly connectionController: ConnectionController,
     private readonly nekoton: typeof nt,
     private readonly keystore?: Keystore,
-  ) {}
+  ) {
+  }
 
   public async getSigner(publicKey: string): Promise<Signer> {
     if (this.keystore == null) {
@@ -135,7 +136,10 @@ export class AccountsStorageContext {
     return this.nekoton.extractContractData(boc);
   }
 
-  public packIntoCell(args: { structure: nt.AbiParam[]; data: nt.TokensObject; abiVersion?: AbiVersion }): string {
+  public packIntoCell(args: { structure: nt.AbiParam[]; data: nt.TokensObject; abiVersion?: AbiVersion }): {
+    boc: string,
+    hash: string,
+  } {
     return this.nekoton.packIntoCell(args.structure, args.data, args.abiVersion);
   }
 

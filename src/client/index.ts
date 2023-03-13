@@ -123,6 +123,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     runLocal,
     executeLocal,
     getExpectedAddress,
+    unpackInitData,
     getBocHash,
     packIntoCell,
     unpackFromCell,
@@ -689,6 +690,21 @@ const getExpectedAddress: ProviderHandler<'getExpectedAddress'> = async (_ctx, r
   }
 };
 
+const unpackInitData: ProviderHandler<'unpackInitData'> = async (_ctx, req) => {
+  requireParams(req);
+
+  const { abi, data } = req.params;
+  requireString(req, req.params, 'abi');
+  requireString(req, req.params, 'data');
+
+  try {
+    const { publicKey, data: initParams } = nekoton.unpackInitData(abi, data);
+    return { publicKey, initParams };
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
 const getBocHash: ProviderHandler<'getBocHash'> = async (_ctx, req) => {
   requireParams(req);
 
@@ -710,7 +726,7 @@ const packIntoCell: ProviderHandler<'packIntoCell'> = async (_ctx, req) => {
   requireOptional(req, req.params, 'abiVersion', requireString);
 
   try {
-    return { boc: nekoton.packIntoCell(structure as nt.AbiParam[], data, abiVersion) };
+    return nekoton.packIntoCell(structure as nt.AbiParam[], data, abiVersion);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -752,7 +768,8 @@ const codeToTvc: ProviderHandler<'codeToTvc'> = async (_ctx, req) => {
   requireString(req, req.params, 'code');
 
   try {
-    return { tvc: nekoton.codeToTvc(code) };
+    const { boc, hash } = nekoton.codeToTvc(code);
+    return { tvc: boc, hash };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -766,7 +783,8 @@ const mergeTvc: ProviderHandler<'mergeTvc'> = async (_ctx, req) => {
   requireString(req, req.params, 'data');
 
   try {
-    return { tvc: nekoton.mergeTvc(code, data) };
+    const { boc, hash } = nekoton.mergeTvc(code, data);
+    return { tvc: boc, hash };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -793,7 +811,8 @@ const setCodeSalt: ProviderHandler<'setCodeSalt'> = async (_ctx, req) => {
   requireString(req, req.params, 'salt');
 
   try {
-    return { code: nekoton.setCodeSalt(code, salt) };
+    const { boc, hash } = nekoton.setCodeSalt(code, salt);
+    return { code: boc, hash };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }

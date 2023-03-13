@@ -19,8 +19,7 @@ export class WalletV3Account implements Account {
     await ensureNekotonLoaded();
 
     const publicKey = args.publicKey instanceof BigNumber ? args.publicKey : new BigNumber(`0x${args.publicKey}`);
-    const tvc = makeStateInit(publicKey);
-    const hash = nekoton.getBocHash(tvc);
+    const hash = makeStateInit(publicKey).hash;
     return new Address(`${args.workchain != null ? args.workchain : 0}:${hash}`);
   }
 
@@ -70,8 +69,7 @@ export class WalletV3Account implements Account {
       message: internalMessage,
     };
 
-    const unsignedPayload = ctx.packIntoCell({ structure: UNSIGNED_TRANSFER_STRUCTURE, data: params });
-    const hash = ctx.getBocHash(unsignedPayload);
+    const hash = ctx.packIntoCell({ structure: UNSIGNED_TRANSFER_STRUCTURE, data: params }).hash;
     const signature = await signer.sign(hash, args.signatureId);
     const { signatureParts } = ctx.extendSignature(signature);
 
@@ -80,7 +78,7 @@ export class WalletV3Account implements Account {
     const signedPayload = ctx.packIntoCell({
       structure: SIGNED_TRANSFER_STRUCTURE,
       data: params,
-    });
+    }).boc;
 
     return ctx.createRawExternalMessage({
       address: this.address,
@@ -104,7 +102,7 @@ export class WalletV3Account implements Account {
         throw new Error('Contract not deployed and public key was not specified');
       }
 
-      stateInit = makeStateInit(this.publicKey);
+      stateInit = makeStateInit(this.publicKey).boc;
       result = { seqno: 0, publicKey: this.publicKey };
     } else {
       const data = ctx.extractContractData(state.boc);
@@ -143,12 +141,12 @@ const parseInitData = (ctx: AccountsStorageContext, boc: string): { seqno: numbe
   };
 };
 
-const makeStateInit = (publicKey: BigNumber) => {
+const makeStateInit = (publicKey: BigNumber): { boc: string, hash: string } => {
   const data = nekoton.packIntoCell(DATA_STRUCTURE, {
     seqno: 0,
     walletId: WALLET_ID,
     publicKey: publicKey.toFixed(0),
-  });
+  }).boc;
   return nekoton.mergeTvc(WALLET_V3_CODE, data);
 };
 

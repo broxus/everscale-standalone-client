@@ -20,8 +20,7 @@ export class HighloadWalletV2 implements Account {
     await ensureNekotonLoaded();
 
     const publicKey = args.publicKey instanceof BigNumber ? args.publicKey : new BigNumber(`0x${args.publicKey}`);
-    const tvc = makeStateInit(publicKey);
-    const hash = nekoton.getBocHash(tvc);
+    const hash = makeStateInit(publicKey).hash;
     return new Address(`${args.workchain != null ? args.workchain : 0}:${hash}`);
   }
 
@@ -75,21 +74,19 @@ export class HighloadWalletV2 implements Account {
       ],
     };
 
-    const messages = ctx.packIntoCell({ structure: MESSAGES_STRUCTURE, data: params });
-    const messagesHash = ctx.getBocHash(messages);
+    const { boc: messages, hash: messagesHash } = ctx.packIntoCell({ structure: MESSAGES_STRUCTURE, data: params });
 
     params.walletId = WALLET_ID;
     params.expireAt = expireAt;
     params.messagesHash = `0x${messagesHash.slice(-8)}`;
 
-    const unsignedPayload = ctx.packIntoCell({ structure: UNSIGNED_TRANSFER_STRUCTURE, data: params });
-    const hash = ctx.getBocHash(unsignedPayload);
+    const hash = ctx.packIntoCell({ structure: UNSIGNED_TRANSFER_STRUCTURE, data: params }).hash;
     const signature = await signer.sign(hash, args.signatureId);
     const { signatureParts } = ctx.extendSignature(signature);
 
     params.signatureHigh = signatureParts.high;
     params.signatureLow = signatureParts.low;
-    const signedPayload = ctx.packIntoCell({ structure: SIGNED_TRANSFER_STRUCTURE, data: params });
+    const signedPayload = ctx.packIntoCell({ structure: SIGNED_TRANSFER_STRUCTURE, data: params }).boc;
 
     return ctx.createRawExternalMessage({
       address: this.address.toString(),
@@ -111,7 +108,7 @@ export class HighloadWalletV2 implements Account {
         throw new Error('Contract not deployed and public key was not specified');
       }
 
-      stateInit = makeStateInit(this.publicKey);
+      stateInit = makeStateInit(this.publicKey).boc;
       publicKey = this.publicKey;
     } else if (this.publicKey == null) {
       const data = ctx.extractContractData(state.boc);
@@ -144,13 +141,13 @@ const parseInitData = (ctx: AccountsStorageContext, boc: string): { publicKey: B
   };
 };
 
-const makeStateInit = (publicKey: BigNumber) => {
+const makeStateInit = (publicKey: BigNumber): { boc: string, hash: string } => {
   const data = nekoton.packIntoCell(DATA_STRUCTURE, {
     walletId: WALLET_ID,
     lastCleaned: 0,
     publicKey: publicKey.toFixed(0),
     queries: false,
-  });
+  }).boc;
   return nekoton.mergeTvc(HIGHLOAD_WALLET_V2_CODE, data);
 };
 
