@@ -1,6 +1,6 @@
 {
   "name": "everscale-standalone-client",
-  "version": "2.1.17",
+  "version": "2.1.14",
   "repository": "https://github.com/broxus/everscale-standalone-client",
   "scripts": {
     "build": "tsc",
@@ -10,22 +10,22 @@
   "author": "",
   "license": "GPL-3.0",
   "devDependencies": {
-    "@types/events": "^3.0.0",
-    "@typescript-eslint/eslint-plugin": "^5.31.0",
-    "@typescript-eslint/parser": "^5.31.0",
-    "eslint": "^8.21.0",
-    "eslint-config-prettier": "^8.5.0",
-    "eslint-plugin-prettier": "^4.2.1",
-    "typescript": "^4.7.4"
+    "@types/events": "3.0.0",
+    "@typescript-eslint/eslint-plugin": "5.31.0",
+    "@typescript-eslint/parser": "5.31.0",
+    "eslint": "8.21.0",
+    "eslint-config-prettier": "8.5.0",
+    "eslint-plugin-prettier": "4.2.1",
+    "typescript": "4.7.4"
   },
   "dependencies": {
-    "@broxus/await-semaphore": "^0.1.5",
-    "bignumber.js": "^9.1.0",
-    "events": "^3.3.0",
-    "everscale-inpage-provider": "^0.3.54",
-    "fast-safe-stringify": "^2.1.1",
-    "nekoton-wasm": "^1.1.1",
-    "node-fetch": "^2.6.7"
+    "@broxus/await-semaphore": "0.1.5",
+    "bignumber.js": "9.1.0",
+    "events": "3.3.0",
+    "everscale-inpage-provider": "0.3.51",
+    "fast-safe-stringify": "2.1.1",
+    "nekoton-wasm": "1.0.13",
+    "node-fetch": "2.6.7"
   },
   "types": "index.d.ts",
   "main": "index_main.js",
