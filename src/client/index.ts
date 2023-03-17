@@ -123,6 +123,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     runLocal,
     executeLocal,
     getExpectedAddress,
+    getContractFields,
     unpackInitData,
     getBocHash,
     packIntoCell,
@@ -685,6 +686,54 @@ const getExpectedAddress: ProviderHandler<'getExpectedAddress'> = async (_ctx, r
 
   try {
     return nekoton.getExpectedAddress(tvc, abi, workchain || 0, publicKey, initParams);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
+const getContractFields: ProviderHandler<'getContractFields'> = async (ctx, req) => {
+  requireParams(req);
+
+  const { address, abi, cachedState, allowPartial } = req.params;
+  requireString(req, req.params, 'address');
+  requireString(req, req.params, 'abi');
+  requireOptional(req, req.params, 'cachedState', requireContractState);
+  requireBoolean(req, req.params, 'allowPartial');
+
+  let repackedAddress: string;
+  try {
+    repackedAddress = nekoton.repackAddress(address);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+
+  let contractState = cachedState;
+  if (contractState == null) {
+    requireConnection(req, ctx);
+    contractState = await ctx.connectionController.use(async ({ data: { transport } }) =>
+      transport.getFullContractState(repackedAddress),
+    );
+  }
+
+  if (contractState == null) {
+    return {
+      fields: undefined,
+      state: undefined,
+    };
+  }
+  if (!contractState.isDeployed || contractState.lastTransactionId == null) {
+    return {
+      fields: undefined,
+      state: contractState,
+    };
+  }
+
+  try {
+    const fields = nekoton.unpackContractFields(abi, contractState.boc, allowPartial);
+    return {
+      fields,
+      state: contractState,
+    };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
