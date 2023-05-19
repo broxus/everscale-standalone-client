@@ -497,11 +497,12 @@ const findTransaction: ProviderHandler<'findTransaction'> = async (ctx, req) => 
 const runLocal: ProviderHandler<'runLocal'> = async (ctx, req) => {
   requireParams(req);
 
-  const { address, cachedState, responsible, functionCall } = req.params;
+  const { address, cachedState, responsible, functionCall, withSignatureId } = req.params;
   requireString(req, req.params, 'address');
   requireOptional(req, req.params, 'cachedState', requireContractState);
   requireOptionalBoolean(req, req.params, 'responsible');
   requireFunctionCall(req, req.params, 'functionCall');
+  requireOptionalSignatureId(req, req.params, 'withSignatureId');
 
   let contractState = cachedState;
   if (contractState == null) {
@@ -518,6 +519,8 @@ const runLocal: ProviderHandler<'runLocal'> = async (ctx, req) => {
     throw invalidRequest(req, 'Account is not deployed');
   }
 
+  const signatureId = await computeSignatureId(req, ctx, withSignatureId);
+
   try {
     const { output, code } = nekoton.runLocal(
       ctx.clock,
@@ -526,6 +529,7 @@ const runLocal: ProviderHandler<'runLocal'> = async (ctx, req) => {
       functionCall.method,
       functionCall.params,
       responsible || false,
+      signatureId,
     );
     return { output, code };
   } catch (e: any) {
@@ -612,9 +616,10 @@ const executeLocal: ProviderHandler<'executeLocal'> = async (ctx, req) => {
     requireBoolean(req, messageHeader, 'bounce');
     requireOptionalBoolean(req, messageHeader, 'bounced');
 
-    const body = payload == null ?
-      undefined
-      : typeof payload === 'string'
+    const body =
+      payload == null
+        ? undefined
+        : typeof payload === 'string'
         ? payload
         : nekoton.encodeInternalInput(payload.abi, payload.method, payload.params);
 
@@ -631,10 +636,14 @@ const executeLocal: ProviderHandler<'executeLocal'> = async (ctx, req) => {
   }
 
   try {
-    const [contractState, blockchainConfig] = await connectionController.use(({ data: { transport } }) => Promise.all([
-      cachedState == null ? transport.getFullContractState(repackedAddress) : cachedState,
-      transport.getBlockchainConfig(),
-    ]));
+    const [contractState, blockchainConfig, networkDescription] = await connectionController.use(
+      ({ data: { transport } }) =>
+        Promise.all([
+          cachedState == null ? transport.getFullContractState(repackedAddress) : cachedState,
+          transport.getBlockchainConfig(),
+          transport.getNetworkDescription(),
+        ]),
+    );
 
     const account = nekoton.makeFullAccountBoc(contractState?.boc);
     const overrideBalance = executorParams?.overrideBalance;
@@ -646,12 +655,13 @@ const executeLocal: ProviderHandler<'executeLocal'> = async (ctx, req) => {
       now,
       executorParams?.disableSignatureCheck === true,
       overrideBalance != null ? overrideBalance.toString() : undefined,
+      networkDescription.globalId,
     );
     if ((result as any).exitCode != null) {
       throw new Error(`Contract did not accept the message. Exit code: ${(result as any).exitCode}`);
     }
 
-    const resultVariant = result as { account: string, transaction: nt.Transaction };
+    const resultVariant = result as { account: string; transaction: nt.Transaction };
     const transaction = resultVariant.transaction;
     const newState = nekoton.parseFullAccountBoc(resultVariant.account);
 
