@@ -45,15 +45,18 @@ export class SubscriptionController {
   }
 
   public sendMessage(address: string, signedMessage: nt.SignedMessage): Promise<nt.Transaction | undefined> {
+    const id = signedMessage.hash;
+
     let messageRequests = this._sendMessageRequests.get(address);
     if (messageRequests == null) {
       messageRequests = new Map();
       this._sendMessageRequests.set(address, messageRequests);
+    } else if (messageRequests.has(id)) {
+      throw new Error(`Trying to send a duplicate message with id '${id}'`);
     }
 
     const subscriptionId = getUniqueId();
     return new Promise<nt.Transaction | undefined>((resolve, reject) => {
-      const id = signedMessage.hash;
       messageRequests!.set(id, { resolve, reject });
 
       this.subscribeToContract(address, { state: true }, subscriptionId)
