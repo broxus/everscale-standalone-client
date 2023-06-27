@@ -227,8 +227,9 @@ export class ConnectionController {
     try {
       const group = params.group != null ? params.group : matchNetworkGroup(params.id);
 
-      const { local, transportData } = await (params.type === 'graphql'
-        ? async () => {
+      const { local, transportData } = await (async() => {
+        switch (params.type) {
+          case 'graphql': {
             const socket = new GqlSocket();
             const connection = await socket.connect(this._clock, params.data);
             const transport = nekoton.Transport.fromGqlConnection(connection);
@@ -249,7 +250,7 @@ export class ConnectionController {
               transportData,
             };
           }
-        : async () => {
+          case 'jrpc': {
             const socket = new JrpcSocket();
             const connection = await socket.connect(this._clock, params.data);
             const transport = nekoton.Transport.fromJrpcConnection(connection);
@@ -269,7 +270,23 @@ export class ConnectionController {
               local: false,
               transportData,
             };
-          })();
+          }
+          case "proxy":
+            const transportData: InitializedTransport = {
+              id: params.id,
+              group,
+              type: 'proxy',
+              data: {
+                connection: params.data,
+                transport: nekoton.Transport.fromProxyConnection(params.data),
+              }
+            }
+            return {
+              local: true,
+              transportData
+            }
+        }
+      })();
 
       try {
         if ((await testTransport(transportData, local)) == TestConnectionResult.CANCELLED) {
@@ -339,7 +356,8 @@ function requireInitializedTransport(transport?: InitializedTransport): asserts 
  */
 export type ConnectionData =
   | { id: number; group?: string; type: 'graphql'; data: GqlSocketParams }
-  | { id: number; group?: string; type: 'jrpc'; data: JrpcSocketParams };
+  | { id: number; group?: string; type: 'jrpc'; data: JrpcSocketParams }
+  | { id: number; group?: string; type: 'proxy'; data: nt.ProxyConnection };
 
 /**
  * @category Client
@@ -347,4 +365,5 @@ export type ConnectionData =
 export type InitializedTransport = { id: number; group: string } & (
   | { type: 'graphql'; data: { socket: GqlSocket; connection: nt.GqlConnection; transport: nt.Transport } }
   | { type: 'jrpc'; data: { socket: JrpcSocket; connection: nt.JrpcConnection; transport: nt.Transport } }
+  | { type: 'proxy'; data: { connection: nt.ProxyConnection, transport: nt.Transport } }
 );
