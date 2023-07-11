@@ -9,6 +9,7 @@ import { SubscriptionController } from './SubscriptionController';
 import { Account, AccountsStorage, AccountsStorageContext } from './AccountsStorage';
 import { Keystore } from './keystore';
 import { Clock } from './clock';
+export * from "./ConnectionController/proxy";
 
 export { NETWORK_PRESETS, ConnectionData, ConnectionProperties } from './ConnectionController';
 export { GqlSocketParams, JrpcSocketParams, ConnectionError, checkConnection } from './ConnectionController';

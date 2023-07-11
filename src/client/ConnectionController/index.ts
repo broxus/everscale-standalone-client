@@ -4,6 +4,7 @@ import type * as nt from 'nekoton-wasm';
 import core from '../../core';
 import { GqlSocket, GqlSocketParams } from './gql';
 import { JrpcSocket, JrpcSocketParams } from './jrpc';
+import {ProxyParams} from "./proxy";
 
 export { GqlSocketParams } from './gql';
 export { JrpcSocketParams } from './jrpc';
@@ -272,13 +273,14 @@ export class ConnectionController {
             };
           }
           case "proxy":
+            const connection = params.data.connectionFactory.create(this._clock);
             const transportData: InitializedTransport = {
               id: params.id,
               group,
-              type: 'proxy',
+              type: "proxy",
               data: {
-                connection: params.data,
-                transport: nekoton.Transport.fromProxyConnection(params.data),
+                connection: connection,
+                transport: nekoton.Transport.fromProxyConnection(connection),
               }
             }
             return {
@@ -287,6 +289,8 @@ export class ConnectionController {
             }
         }
       })();
+
+
 
       try {
         if ((await testTransport(transportData, local)) == TestConnectionResult.CANCELLED) {
@@ -357,7 +361,7 @@ function requireInitializedTransport(transport?: InitializedTransport): asserts 
 export type ConnectionData =
   | { id: number; group?: string; type: 'graphql'; data: GqlSocketParams }
   | { id: number; group?: string; type: 'jrpc'; data: JrpcSocketParams }
-  | { id: number; group?: string; type: 'proxy'; data: nt.ProxyConnection };
+  | { id: number; group?: string; type: 'proxy'; data: ProxyParams };
 
 /**
  * @category Client
