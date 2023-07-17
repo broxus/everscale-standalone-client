@@ -1,4 +1,4 @@
-import type * as nt from 'nekoton-wasm';
+import * as nt from 'nekoton-wasm';
 
 
 export abstract class ConnectionFactory {
