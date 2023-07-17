@@ -376,6 +376,18 @@ const unsubscribeAll: ProviderHandler<'unsubscribeAll'> = async (ctx, _req) => {
   return undefined;
 };
 
+const setPollingInterval: ProviderHandler<'setPollingInterval'> = async (ctx, req) => {
+  requireParams(req);
+  requireConnection(req, ctx);
+
+  const { interval } = req.params;
+  requireNumber(req, req.params, 'interval');
+
+  ctx.subscriptionController?.setPollingInterval(interval);
+
+  return undefined;
+}
+
 const getProviderState: ProviderHandler<'getProviderState'> = async (ctx, _req) => {
   const transport = ctx.connectionController?.initializedTransport;
 

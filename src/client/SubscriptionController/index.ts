@@ -16,6 +16,7 @@ export class SubscriptionController {
   private readonly _subscriptionsMutex: Mutex = new Mutex();
   private readonly _sendMessageRequests: Map<string, Map<string, SendMessageCallback>> = new Map();
   private readonly _subscriptionStates: Map<string, SubscriptionState> = new Map();
+  private _pollingInterval: number = DEFAULT_POLLING_INTERVAL;
 
   constructor(
     connectionController: ConnectionController,
@@ -23,6 +24,10 @@ export class SubscriptionController {
   ) {
     this._connectionController = connectionController;
     this._notify = notify;
+  }
+
+  public setPollingInterval(interval: number) {
+    this._pollingInterval = interval;
   }
 
   public async sendMessageLocally(
@@ -237,7 +242,7 @@ export class SubscriptionController {
     const handler = new ContractHandler(address, this);
 
     const subscription = await ContractSubscription.subscribe(this._connectionController, address, handler);
-    subscription.setPollingInterval(DEFAULT_POLLING_INTERVAL);
+    subscription.setPollingInterval(this._pollingInterval);
     handler.enableNotifications();
 
     this._subscriptions.set(address, subscription);
