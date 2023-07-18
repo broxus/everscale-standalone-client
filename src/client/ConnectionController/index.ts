@@ -4,7 +4,7 @@ import type * as nt from 'nekoton-wasm';
 import core from '../../core';
 import { GqlSocket, GqlSocketParams } from './gql';
 import { JrpcSocket, JrpcSocketParams } from './jrpc';
-import {ProxyParams} from "./proxy";
+import { ProxyParams } from './proxy';
 
 export { GqlSocketParams } from './gql';
 export { JrpcSocketParams } from './jrpc';
@@ -228,7 +228,7 @@ export class ConnectionController {
     try {
       const group = params.group != null ? params.group : matchNetworkGroup(params.id);
 
-      const { local, transportData } = await (async() => {
+      const { local, transportData } = await (async () => {
         switch (params.type) {
           case 'graphql': {
             const socket = new GqlSocket();
@@ -272,25 +272,24 @@ export class ConnectionController {
               transportData,
             };
           }
-          case "proxy":
+          case 'proxy': {
             const connection = params.data.connectionFactory.create(this._clock);
             const transportData: InitializedTransport = {
               id: params.id,
               group,
-              type: "proxy",
+              type: 'proxy',
               data: {
                 connection: connection,
                 transport: nekoton.Transport.fromProxyConnection(connection),
-              }
-            }
+              },
+            };
             return {
               local: true,
-              transportData
-            }
+              transportData,
+            };
+          }
         }
       })();
-
-
 
       try {
         if ((await testTransport(transportData, local)) == TestConnectionResult.CANCELLED) {
@@ -369,5 +368,5 @@ export type ConnectionData =
 export type InitializedTransport = { id: number; group: string } & (
   | { type: 'graphql'; data: { socket: GqlSocket; connection: nt.GqlConnection; transport: nt.Transport } }
   | { type: 'jrpc'; data: { socket: JrpcSocket; connection: nt.JrpcConnection; transport: nt.Transport } }
-  | { type: 'proxy'; data: { connection: nt.ProxyConnection, transport: nt.Transport } }
+  | { type: 'proxy'; data: { connection: nt.ProxyConnection; transport: nt.Transport } }
 );
