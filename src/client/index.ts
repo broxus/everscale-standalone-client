@@ -202,6 +202,13 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     }
   }
 
+  public setPollingInterval = (interval: number) => {
+    if (this._context.connectionController == null || this._context.subscriptionController == null) {
+      throw Error('Connection was not initialized');
+    }
+    this._context.subscriptionController?.setPollingInterval(interval);
+  }
+
   public static setDebugLogger(logger: (...data: any[]) => void) {
     core.debugLog = logger;
   }
@@ -375,18 +382,6 @@ const unsubscribeAll: ProviderHandler<'unsubscribeAll'> = async (ctx, _req) => {
   await ctx.subscriptionController?.unsubscribeFromAllContracts();
   return undefined;
 };
-
-const setPollingInterval: ProviderHandler<'setPollingInterval'> = async (ctx, req) => {
-  requireParams(req);
-  requireConnection(req, ctx);
-
-  const { interval } = req.params;
-  requireNumber(req, req.params, 'interval');
-
-  ctx.subscriptionController?.setPollingInterval(interval);
-
-  return undefined;
-}
 
 const getProviderState: ProviderHandler<'getProviderState'> = async (ctx, _req) => {
   const transport = ctx.connectionController?.initializedTransport;
@@ -970,6 +965,7 @@ const decodeTransaction: ProviderHandler<'decodeTransaction'> = async (_ctx, req
   requireMethodOrArray(req, req.params, 'method');
 
   try {
+    // @ts-ignore
     return nekoton.decodeTransaction(transaction, abi, method) || null;
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
@@ -983,6 +979,7 @@ const decodeTransactionEvents: ProviderHandler<'decodeTransactionEvents'> = asyn
   requireString(req, req.params, 'abi');
 
   try {
+    // @ts-ignore
     return { events: nekoton.decodeTransactionEvents(transaction, abi) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());

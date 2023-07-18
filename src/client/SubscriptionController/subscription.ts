@@ -71,6 +71,7 @@ export class ContractSubscription {
 
     this._loopPromise = (async () => {
       const isSimple = !(this._connection instanceof nekoton.GqlConnection);
+      const isProxy = this._connection instanceof nekoton.ProxyConnection;
 
       this._isRunning = true;
       let previousPollingMethod = this._currentPollingMethod;
@@ -86,7 +87,7 @@ export class ContractSubscription {
           debugLog('ContractSubscription -> manual -> waiting begins');
 
           const pollingInterval =
-            this._currentPollingMethod == 'manual' ? this._pollingInterval : INTENSIVE_POLLING_INTERVAL;
+            (this._currentPollingMethod == 'manual' || isProxy) ? this._pollingInterval : INTENSIVE_POLLING_INTERVAL;
 
           await new Promise<void>(resolve => {
             const timerHandle = setTimeout(() => {
