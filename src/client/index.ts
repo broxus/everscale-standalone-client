@@ -9,6 +9,7 @@ import { SubscriptionController } from './SubscriptionController';
 import { Account, AccountsStorage, AccountsStorageContext } from './AccountsStorage';
 import { Keystore } from './keystore';
 import { Clock } from './clock';
+export * from './ConnectionController/proxy';
 
 export { NETWORK_PRESETS, ConnectionData, ConnectionProperties } from './ConnectionController';
 export { GqlSocketParams, JrpcSocketParams, ConnectionError, checkConnection } from './ConnectionController';
@@ -200,6 +201,13 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
       throw e;
     }
   }
+
+  public setPollingInterval = (interval: number) => {
+    if (this._context.connectionController == null || this._context.subscriptionController == null) {
+      throw Error('Connection was not initialized');
+    }
+    this._context.subscriptionController?.setPollingInterval(interval);
+  };
 
   public static setDebugLogger(logger: (...data: any[]) => void) {
     core.debugLog = logger;
@@ -576,7 +584,7 @@ const executeLocal: ProviderHandler<'executeLocal'> = async (ctx, req) => {
         timeout,
       ).boc;
     } else {
-      let unsignedMessage = nekoton.createExternalMessage(
+      const unsignedMessage = nekoton.createExternalMessage(
         clock,
         repackedAddress,
         payload.abi,
@@ -957,6 +965,7 @@ const decodeTransaction: ProviderHandler<'decodeTransaction'> = async (_ctx, req
   requireMethodOrArray(req, req.params, 'method');
 
   try {
+    // @ts-ignore
     return nekoton.decodeTransaction(transaction, abi, method) || null;
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
@@ -970,6 +979,7 @@ const decodeTransactionEvents: ProviderHandler<'decodeTransactionEvents'> = asyn
   requireString(req, req.params, 'abi');
 
   try {
+    // @ts-ignore
     return { events: nekoton.decodeTransactionEvents(transaction, abi) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
