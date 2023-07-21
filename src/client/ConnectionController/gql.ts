@@ -31,7 +31,7 @@ export type GqlSocketParams = {
 };
 
 export class GqlSocket {
-  public async connect(clock: nt.ClockWithOffset, params: GqlSocketParams): Promise<nt.GqlConnection> {
+  public async connect(params: GqlSocketParams): Promise<nt.GqlConnection> {
     class GqlSender implements nt.IGqlSender {
       private readonly local: boolean;
       private readonly maxLatency: number;
@@ -151,7 +151,7 @@ export class GqlSocket {
       }
     }
 
-    return new nekoton.GqlConnection(clock, new GqlSender(params));
+    return new nekoton.GqlConnection(new GqlSender(params));
   }
 
   static async checkLatency(endpoint: Endpoint): Promise<number | undefined> {

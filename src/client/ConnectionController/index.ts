@@ -232,8 +232,8 @@ export class ConnectionController {
         switch (params.type) {
           case 'graphql': {
             const socket = new GqlSocket();
-            const connection = await socket.connect(this._clock, params.data);
-            const transport = nekoton.Transport.fromGqlConnection(connection);
+            const connection = await socket.connect(params.data);
+            const transport = nekoton.Transport.fromGqlConnection(connection, this._clock);
 
             const transportData: InitializedTransport = {
               id: params.id,
@@ -253,8 +253,8 @@ export class ConnectionController {
           }
           case 'jrpc': {
             const socket = new JrpcSocket();
-            const connection = await socket.connect(this._clock, params.data);
-            const transport = nekoton.Transport.fromJrpcConnection(connection);
+            const connection = await socket.connect(params.data);
+            const transport = nekoton.Transport.fromJrpcConnection(connection, this._clock);
 
             const transportData: InitializedTransport = {
               id: params.id,
@@ -280,7 +280,7 @@ export class ConnectionController {
               type: 'proxy',
               data: {
                 connection: connection,
-                transport: nekoton.Transport.fromProxyConnection(connection),
+                transport: nekoton.Transport.fromProxyConnection(connection, this._clock),
               },
             };
             return {

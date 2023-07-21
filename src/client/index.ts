@@ -965,8 +965,8 @@ const decodeTransaction: ProviderHandler<'decodeTransaction'> = async (_ctx, req
   requireMethodOrArray(req, req.params, 'method');
 
   try {
-    // @ts-ignore
-    return nekoton.decodeTransaction(transaction, abi, method) || null;
+    // NOTE: boc field is not used in decoder
+    return nekoton.decodeTransaction(transaction as nt.Transaction, abi, method) || null;
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -979,8 +979,8 @@ const decodeTransactionEvents: ProviderHandler<'decodeTransactionEvents'> = asyn
   requireString(req, req.params, 'abi');
 
   try {
-    // @ts-ignore
-    return { events: nekoton.decodeTransactionEvents(transaction, abi) };
+    // NOTE: boc field is not used in decoder
+    return { events: nekoton.decodeTransactionEvents(transaction as nt.Transaction, abi) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }

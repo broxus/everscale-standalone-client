@@ -19,7 +19,7 @@ export type JrpcSocketParams = {
 };
 
 export class JrpcSocket {
-  public async connect(clock: nt.ClockWithOffset, params: JrpcSocketParams): Promise<nt.JrpcConnection> {
+  public async connect(params: JrpcSocketParams): Promise<nt.JrpcConnection> {
     class JrpcSender {
       private readonly endpoint: string;
       private readonly endpointAgent?: any;
@@ -53,7 +53,7 @@ export class JrpcSocket {
       }
     }
 
-    return new nekoton.JrpcConnection(clock, new JrpcSender(params));
+    return new nekoton.JrpcConnection(new JrpcSender(params));
   }
 }
 
