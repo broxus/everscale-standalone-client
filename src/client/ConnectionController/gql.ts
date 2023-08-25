@@ -56,7 +56,7 @@ export class GqlSocket {
         return this.local;
       }
 
-      send(data: string, handler: nt.GqlQuery, _longQuery: boolean) {
+      send(data: string, handler: nt.StringQuery, _longQuery: boolean) {
         (async () => {
           const now = Date.now();
           try {

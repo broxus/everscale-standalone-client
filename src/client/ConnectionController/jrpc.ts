@@ -20,7 +20,7 @@ export type JrpcSocketParams = {
 
 export class JrpcSocket {
   public async connect(params: JrpcSocketParams): Promise<nt.JrpcConnection> {
-    class JrpcSender {
+    class JrpcSender implements nt.IJrpcSender {
       private readonly endpoint: string;
       private readonly endpointAgent?: any;
       private readonly alternativeEndpoint: string;
@@ -33,7 +33,7 @@ export class JrpcSocket {
         this.alternativeEndpointAgent = fetchAgent(this.alternativeEndpoint);
       }
 
-      send(data: string, handler: nt.JrpcQuery, requiresDb: boolean) {
+      send(data: string, handler: nt.StringQuery, requiresDb: boolean) {
         (async () => {
           try {
             const url = requiresDb ? this.endpoint : this.alternativeEndpoint;

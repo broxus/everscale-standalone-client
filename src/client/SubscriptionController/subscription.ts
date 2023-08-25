@@ -87,7 +87,7 @@ export class ContractSubscription {
           debugLog('ContractSubscription -> manual -> waiting begins');
 
           const pollingInterval =
-            (this._currentPollingMethod == 'manual' || isProxy) ? this._pollingInterval : INTENSIVE_POLLING_INTERVAL;
+            this._currentPollingMethod == 'manual' || isProxy ? this._pollingInterval : INTENSIVE_POLLING_INTERVAL;
 
           await new Promise<void>(resolve => {
             const timerHandle = setTimeout(() => {
@@ -238,7 +238,7 @@ export interface IContractHandler<T extends nt.Transaction> {
   onTransactionsFound(transactions: Array<T>, info: nt.TransactionsBatchInfo): void;
 }
 
-type Connection = nt.GqlConnection | nt.JrpcConnection;
+type Connection = nt.GqlConnection | nt.JrpcConnection | nt.ProtoConnection | nt.ProxyConnection;
 
 const NEXT_BLOCK_TIMEOUT = 60; // 60s
 const INTENSIVE_POLLING_INTERVAL = 2000; // 2s

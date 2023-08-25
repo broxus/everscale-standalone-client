@@ -5,6 +5,7 @@ import core from '../../core';
 import { GqlSocket, GqlSocketParams } from './gql';
 import { JrpcSocket, JrpcSocketParams } from './jrpc';
 import { ProxyParams } from './proxy';
+import { ProtoSocket, ProtoSocketParams } from './proto';
 
 export { GqlSocketParams } from './gql';
 export { JrpcSocketParams } from './jrpc';
@@ -99,7 +100,10 @@ export async function checkConnection(params: ConnectionProperties): Promise<voi
  * @category Client
  */
 export class ConnectionError extends Error {
-  constructor(public readonly params: ConnectionData, message: string) {
+  constructor(
+    public readonly params: ConnectionData,
+    message: string,
+  ) {
     super(message);
   }
 }
@@ -272,6 +276,27 @@ export class ConnectionController {
               transportData,
             };
           }
+          case 'proto': {
+            const socket = new ProtoSocket();
+            const connection = await socket.connect(params.data);
+            const transport = nekoton.Transport.fromProtoConnection(connection, this._clock);
+
+            const transportData: InitializedTransport = {
+              id: params.id,
+              group,
+              type: 'proto',
+              data: {
+                socket,
+                connection,
+                transport,
+              },
+            };
+
+            return {
+              local: false,
+              transportData,
+            };
+          }
           case 'proxy': {
             const connection = params.data.connectionFactory.create(this._clock);
             const transportData: InitializedTransport = {
@@ -360,6 +385,7 @@ function requireInitializedTransport(transport?: InitializedTransport): asserts 
 export type ConnectionData =
   | { id: number; group?: string; type: 'graphql'; data: GqlSocketParams }
   | { id: number; group?: string; type: 'jrpc'; data: JrpcSocketParams }
+  | { id: number; group?: string; type: 'proto'; data: ProtoSocketParams }
   | { id: number; group?: string; type: 'proxy'; data: ProxyParams };
 
 /**
@@ -368,5 +394,6 @@ export type ConnectionData =
 export type InitializedTransport = { id: number; group: string } & (
   | { type: 'graphql'; data: { socket: GqlSocket; connection: nt.GqlConnection; transport: nt.Transport } }
   | { type: 'jrpc'; data: { socket: JrpcSocket; connection: nt.JrpcConnection; transport: nt.Transport } }
+  | { type: 'proto'; data: { socket: ProtoSocket; connection: nt.ProtoConnection; transport: nt.Transport } }
   | { type: 'proxy'; data: { connection: nt.ProxyConnection; transport: nt.Transport } }
 );
