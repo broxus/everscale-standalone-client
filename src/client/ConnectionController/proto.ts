@@ -31,7 +31,7 @@ export class ProtoSocket {
             const response = await fetch(this.endpoint, {
               method: 'post',
               headers: DEFAULT_HEADERS,
-              body: data,
+              body: new Uint8Array(data),
               agent: this.endpointAgent,
             } as RequestInit).then(response => response.arrayBuffer());
             handler.onReceive(new Uint8Array(response));
