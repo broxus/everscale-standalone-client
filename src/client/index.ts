@@ -117,6 +117,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     unsubscribeAll,
     getProviderState,
     getFullContractState,
+    computeStorageFee,
     getAccountsByCodeHash,
     getTransactions,
     getTransaction,
@@ -417,6 +418,26 @@ const getFullContractState: ProviderHandler<'getFullContractState'> = async (ctx
   }
 };
 
+const computeStorageFee: ProviderHandler<'computeStorageFee'> = async (ctx, req) => {
+  requireParams(req);
+  requireConnection(req, ctx);
+
+  const { state, masterchain, timestamp } = req.params;
+  requireContractStateBoc(req, req.params, 'state');
+  requireOptionalBoolean(req, req.params, 'masterchain');
+  requireOptionalNumber(req, req.params, 'timestamp');
+
+  const { connectionController } = ctx;
+
+  try {
+    const config = await connectionController.use(({ data: { transport } }) => transport.getBlockchainConfig());
+    const utime = timestamp != null ? timestamp : ~~(ctx.clock.nowMs / 1000);
+    return nekoton.computeStorageFee(config, state.boc, utime, masterchain || false);
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
 const getAccountsByCodeHash: ProviderHandler<'getAccountsByCodeHash'> = async (ctx, req) => {
   requireParams(req);
   requireConnection(req, ctx);
@@ -628,8 +649,8 @@ const executeLocal: ProviderHandler<'executeLocal'> = async (ctx, req) => {
       payload == null
         ? undefined
         : typeof payload === 'string'
-        ? payload
-        : nekoton.encodeInternalInput(payload.abi, payload.method, payload.params);
+          ? payload
+          : nekoton.encodeInternalInput(payload.abi, payload.method, payload.params);
 
     message = nekoton.encodeInternalMessage(
       messageHeader.sender,
@@ -1646,6 +1667,16 @@ function requireLastTransactionId<O, P extends keyof O>(
   requireBoolean(req, property, 'isExact');
   requireString(req, property, 'lt');
   requireOptionalString(req, property, 'hash');
+}
+
+function requireContractStateBoc<O, P extends keyof O>(
+  req: ever.RawProviderRequest<ever.ProviderMethod>,
+  object: O,
+  key: P,
+) {
+  requireObject(req, object, key);
+  const property = object[key] as unknown as ever.FullContractState;
+  requireString(req, property, 'boc');
 }
 
 function requireContractState<O, P extends keyof O>(
