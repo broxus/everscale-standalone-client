@@ -115,7 +115,7 @@ export class ContractSubscription {
               return this._contract.pollingMethod;
             });
           } catch (e: any) {
-            console.error(`Error during account refresh (${this._address})`, e);
+            debugLog(`Error during account refresh (${this._address})`, e);
           }
 
           debugLog('ContractSubscription -> manual -> refreshing ends');
@@ -132,21 +132,21 @@ export class ContractSubscription {
 
           let nextBlockId: string;
           if (this._currentBlockId == null) {
-            console.warn('Starting reliable connection with unknown block');
+            debugLog('ContractSubscription -> starting reliable connection with unknown block');
 
             try {
               const latestBlock = await connection.getLatestBlock(this._address);
               this._currentBlockId = latestBlock.id;
               nextBlockId = this._currentBlockId;
             } catch (e: any) {
-              console.error(`Failed to get latest block for ${this._address}`, e);
+              debugLog(`Failed to get latest block for ${this._address}`, e);
               continue;
             }
           } else {
             try {
               nextBlockId = await connection.waitForNextBlock(this._currentBlockId, this._address, NEXT_BLOCK_TIMEOUT);
             } catch (e: any) {
-              console.error(`Failed to wait for next block for ${this._address}`);
+              debugLog(`Failed to wait for next block for ${this._address}`);
               continue; // retry
             }
           }
@@ -158,7 +158,7 @@ export class ContractSubscription {
             });
             this._currentBlockId = nextBlockId;
           } catch (e: any) {
-            console.error(`Failed to handle block for ${this._address}`, e);
+            debugLog(`Failed to handle block for ${this._address}`, e);
           }
         }
       }
