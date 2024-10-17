@@ -94,8 +94,14 @@ myApp().catch(console.error);
 
 ### Build with Vite
 
-Using [Vite](https://vitejs.dev) you will stuck with [issue](https://github.com/vitejs/vite/issues/8427). As a workaround, add `nekoton-wasm-vite` plugin to your `vite.config.ts`.
+Using [Vite](https://vitejs.dev) you might stuck with this [issue](https://github.com/vitejs/vite/issues/8427). As a workaround, you can try this:
 
+Install the dev-server plugin:
+```bash
+npm install --save-dev nekoton-wasm-vite
+```
+
+And add it to the `vite.config.ts`:
 ```js
 import { defineConfig } from 'vite'
 import { nekotonWasmVite } from 'nekoton-wasm-vite'
@@ -106,8 +112,7 @@ export default defineConfig({
     // ...
   ],
   // ...
-})
-
+});
 ```
 
 ## Contributing
