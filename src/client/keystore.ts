@@ -1,8 +1,6 @@
 import type * as nt from 'nekoton-wasm';
 import core from '../core';
 
-const { nekoton } = core;
-
 /**
  * @category Keystore
  */
@@ -44,7 +42,7 @@ export class SimpleKeystore implements Keystore {
   }
 
   public static generateKeyPair(): nt.Ed25519KeyPair {
-    return nekoton.ed25519_generateKeyPair();
+    return core.nekoton.ed25519_generateKeyPair();
   }
 
   public addKeyPair(keyPair: nt.Ed25519KeyPair): void;
@@ -122,6 +120,6 @@ class SimpleSigner implements Signer {
   readonly publicKey: string = this.keyPair.publicKey;
 
   async sign(rawData: string, signatureId?: number): Promise<string> {
-    return nekoton.ed25519_sign(this.keyPair.secretKey, rawData, signatureId);
+    return core.nekoton.ed25519_sign(this.keyPair.secretKey, rawData, signatureId);
   }
 }

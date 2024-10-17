@@ -5,8 +5,6 @@ import BigNumber from 'bignumber.js';
 import core from '../../core';
 import { Account, PrepareMessageParams, AccountsStorageContext } from './';
 
-const { ensureNekotonLoaded, nekoton } = core;
-
 /**
  * @category AccountsStorage
  */
@@ -16,7 +14,7 @@ export class WalletV3Account implements Account {
 
   public static async computeAddress(args: { publicKey: string | BigNumber; workchain?: number }): Promise<Address> {
     // TODO: Somehow propagate init params
-    await ensureNekotonLoaded();
+    await core.ensureNekotonLoaded();
 
     const publicKey = args.publicKey instanceof BigNumber ? args.publicKey : new BigNumber(`0x${args.publicKey}`);
     const hash = makeStateInit(publicKey).hash;
@@ -142,12 +140,12 @@ const parseInitData = (ctx: AccountsStorageContext, boc: string): { seqno: numbe
 };
 
 const makeStateInit = (publicKey: BigNumber): { boc: string, hash: string } => {
-  const data = nekoton.packIntoCell(DATA_STRUCTURE, {
+  const data = core.nekoton.packIntoCell(DATA_STRUCTURE, {
     seqno: 0,
     walletId: WALLET_ID,
     publicKey: publicKey.toFixed(0),
   }).boc;
-  return nekoton.mergeTvc(WALLET_V3_CODE, data);
+  return core.nekoton.mergeTvc(WALLET_V3_CODE, data);
 };
 
 const UNSIGNED_TRANSFER_STRUCTURE: nt.AbiParam[] = [

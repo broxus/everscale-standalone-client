@@ -94,22 +94,20 @@ myApp().catch(console.error);
 
 ### Build with Vite
 
-Using [Vite](https://vitejs.dev) you will stuck with [issue](https://github.com/vitejs/vite/issues/8427). As workaround you may initialize provider like in the example below.
+Using [Vite](https://vitejs.dev) you will stuck with [issue](https://github.com/vitejs/vite/issues/8427). As a workaround, add `nekoton-wasm-vite` plugin to your `vite.config.ts`.
 
 ```js
-import { Address, ProviderRpcClient } from 'everscale-inpage-provider';
-import { EverscaleStandaloneClient } from 'everscale-standalone-client';
+import { defineConfig } from 'vite'
+import { nekotonWasmVite } from 'nekoton-wasm-vite'
 
-const client = new ProviderRpcClient({
-  forceUseFallback: true,
-  fallback: () =>
-    EverscaleStandaloneClient.create({
-      connection: {
-        /*...*/
-      },
-      initInput: '../../node_modules/nekoton-wasm/nekoton_wasm_bg.wasm',
-    }),
-});
+export default defineConfig({
+  plugins: [
+    nekotonWasmVite(), // <-- add to plugins section
+    // ...
+  ],
+  // ...
+})
+
 ```
 
 ## Contributing

@@ -2,8 +2,6 @@ import type * as nt from 'nekoton-wasm';
 
 import core from '../../core';
 
-const { nekoton, fetch, fetchAgent, debugLog } = core;
-
 /**
  * @category Client
  */
@@ -151,7 +149,7 @@ export class GqlSocket {
       }
     }
 
-    return new nekoton.GqlConnection(new GqlSender(params));
+    return new core.nekoton.GqlConnection(new GqlSender(params));
   }
 
   static async checkLatency(endpoint: Endpoint): Promise<number | undefined> {
@@ -161,7 +159,7 @@ export class GqlSocket {
     } as RequestInit)
       .then(response => response.json())
       .catch((e: any) => {
-        debugLog(e);
+        core.debugLog(e);
         return undefined;
       })) as any;
 
@@ -201,7 +199,7 @@ export class GqlSocket {
 
     return {
       url,
-      agent: fetchAgent(url),
+      agent: core.fetchAgent(url),
     };
   };
 }

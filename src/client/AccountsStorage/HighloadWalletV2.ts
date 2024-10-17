@@ -6,8 +6,6 @@ import core from '../../core';
 import { Account, PrepareMessageParams, AccountsStorageContext } from './';
 import { convertToAddressObject } from '../utils';
 
-const { ensureNekotonLoaded, nekoton } = core;
-
 /**
  * @category AccountsStorage
  */
@@ -17,7 +15,7 @@ export class HighloadWalletV2 implements Account {
 
   public static async computeAddress(args: { publicKey: string | BigNumber; workchain?: number }): Promise<Address> {
     // TODO: Somehow propagate init params
-    await ensureNekotonLoaded();
+    await core.ensureNekotonLoaded();
 
     const publicKey = args.publicKey instanceof BigNumber ? args.publicKey : new BigNumber(`0x${args.publicKey}`);
     const hash = makeStateInit(publicKey).hash;
@@ -142,13 +140,13 @@ const parseInitData = (ctx: AccountsStorageContext, boc: string): { publicKey: B
 };
 
 const makeStateInit = (publicKey: BigNumber): { boc: string, hash: string } => {
-  const data = nekoton.packIntoCell(DATA_STRUCTURE, {
+  const data = core.nekoton.packIntoCell(DATA_STRUCTURE, {
     walletId: WALLET_ID,
     lastCleaned: 0,
     publicKey: publicKey.toFixed(0),
     queries: false,
   }).boc;
-  return nekoton.mergeTvc(HIGHLOAD_WALLET_V2_CODE, data);
+  return core.nekoton.mergeTvc(HIGHLOAD_WALLET_V2_CODE, data);
 };
 
 const MESSAGES_STRUCTURE: nt.AbiParam[] = [

@@ -2,8 +2,6 @@ import type * as nt from 'nekoton-wasm';
 
 import core from '../../core';
 
-const { nekoton, fetch, fetchAgent } = core;
-
 /**
  * @category Client
  */
@@ -22,7 +20,7 @@ export class ProtoSocket {
 
       constructor(params: ProtoSocketParams) {
         this.endpoint = params.endpoint;
-        this.endpointAgent = fetchAgent(this.endpoint);
+        this.endpointAgent = core.fetchAgent(this.endpoint);
       }
 
       send(data: Uint8Array, handler: nt.BytesQuery, _: boolean) {
@@ -42,7 +40,7 @@ export class ProtoSocket {
       }
     }
 
-    return new nekoton.ProtoConnection(new ProtoSender(params));
+    return new core.nekoton.ProtoConnection(new ProtoSender(params));
   }
 }
 

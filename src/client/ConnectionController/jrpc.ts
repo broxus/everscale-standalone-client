@@ -2,8 +2,6 @@ import type * as nt from 'nekoton-wasm';
 
 import core from '../../core';
 
-const { nekoton, fetch, fetchAgent } = core;
-
 /**
  * @category Client
  */
@@ -28,9 +26,9 @@ export class JrpcSocket {
 
       constructor(params: JrpcSocketParams) {
         this.endpoint = params.endpoint;
-        this.endpointAgent = fetchAgent(this.endpoint);
+        this.endpointAgent = core.fetchAgent(this.endpoint);
         this.alternativeEndpoint = params.alternativeEndpoint != null ? params.alternativeEndpoint : params.endpoint;
-        this.alternativeEndpointAgent = fetchAgent(this.alternativeEndpoint);
+        this.alternativeEndpointAgent = core.fetchAgent(this.alternativeEndpoint);
       }
 
       send(data: string, handler: nt.StringQuery, requiresDb: boolean) {
@@ -53,7 +51,7 @@ export class JrpcSocket {
       }
     }
 
-    return new nekoton.JrpcConnection(new JrpcSender(params));
+    return new core.nekoton.JrpcConnection(new JrpcSender(params));
   }
 }
 

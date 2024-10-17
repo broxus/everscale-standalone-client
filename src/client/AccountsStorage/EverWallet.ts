@@ -5,8 +5,6 @@ import BigNumber from 'bignumber.js';
 import core from '../../core';
 import { Account, PrepareMessageParams, AccountsStorageContext } from './';
 
-const { ensureNekotonLoaded, nekoton } = core;
-
 /**
  * @category AccountsStorage
  */
@@ -25,7 +23,7 @@ export class EverWalletAccount implements Account {
     nonce?: number;
   }): Promise<Address> {
     // TODO: Somehow propagate init params
-    await ensureNekotonLoaded();
+    await core.ensureNekotonLoaded();
 
     const publicKey = args.publicKey instanceof BigNumber ? args.publicKey : new BigNumber(`0x${args.publicKey}`);
     const hash = makeStateInit(publicKey, args.nonce).hash;
@@ -126,7 +124,7 @@ export class EverWalletAccount implements Account {
         publicKey = this.publicKey;
       } else {
         this.isDeployed = true;
-        publicKey = new BigNumber(`0x${nekoton.extractPublicKey(state.boc)}`);
+        publicKey = new BigNumber(`0x${core.nekoton.extractPublicKey(state.boc)}`);
       }
 
       if (this.publicKey == null) {
@@ -158,8 +156,8 @@ const makeStateInit = (publicKey: BigNumber, nonce?: number): { boc: string, has
     };
   }
 
-  const data = nekoton.packIntoCell(params, tokens).boc;
-  return nekoton.mergeTvc(EVER_WALLET_CODE, data);
+  const data = core.nekoton.packIntoCell(params, tokens).boc;
+  return core.nekoton.mergeTvc(EVER_WALLET_CODE, data);
 };
 
 const DATA_STRUCTURE: nt.AbiParam[] = [

@@ -4,8 +4,6 @@ import type * as nt from 'nekoton-wasm';
 import core from '../../core';
 import { ConnectionController } from '../ConnectionController';
 
-const { nekoton, debugLog } = core;
-
 export class ContractSubscription {
   private readonly _connection: Connection;
   private readonly _address: string;
@@ -63,15 +61,15 @@ export class ContractSubscription {
     }
 
     if (this._loopPromise) {
-      debugLog('ContractSubscription -> awaiting loop promise');
+      core.debugLog('ContractSubscription -> awaiting loop promise');
       await this._loopPromise;
     }
 
-    debugLog('ContractSubscription -> loop started');
+    core.debugLog('ContractSubscription -> loop started');
 
     this._loopPromise = (async () => {
-      const isSimple = !(this._connection instanceof nekoton.GqlConnection);
-      const isProxy = this._connection instanceof nekoton.ProxyConnection;
+      const isSimple = !(this._connection instanceof core.nekoton.GqlConnection);
+      const isProxy = this._connection instanceof core.nekoton.ProxyConnection;
 
       this._isRunning = true;
       let previousPollingMethod = this._currentPollingMethod;
@@ -84,7 +82,7 @@ export class ContractSubscription {
         if (isSimple || this._currentPollingMethod == 'manual') {
           this._currentBlockId = undefined;
 
-          debugLog('ContractSubscription -> manual -> waiting begins');
+          core.debugLog('ContractSubscription -> manual -> waiting begins');
 
           const pollingInterval =
             this._currentPollingMethod == 'manual' || isProxy ? this._pollingInterval : INTENSIVE_POLLING_INTERVAL;
@@ -97,7 +95,7 @@ export class ContractSubscription {
             this._refreshTimer = [timerHandle, resolve];
           });
 
-          debugLog('ContractSubscription -> manual -> waiting ends');
+          core.debugLog('ContractSubscription -> manual -> waiting ends');
 
           if (this._skipIteration) {
             continue;
@@ -107,7 +105,7 @@ export class ContractSubscription {
             break;
           }
 
-          debugLog('ContractSubscription -> manual -> refreshing begins');
+          core.debugLog('ContractSubscription -> manual -> refreshing begins');
 
           try {
             this._currentPollingMethod = await this._contractMutex.use(async () => {
@@ -115,15 +113,15 @@ export class ContractSubscription {
               return this._contract.pollingMethod;
             });
           } catch (e: any) {
-            debugLog(`Error during account refresh (${this._address})`, e);
+            core.debugLog(`Error during account refresh (${this._address})`, e);
           }
 
-          debugLog('ContractSubscription -> manual -> refreshing ends');
+          core.debugLog('ContractSubscription -> manual -> refreshing ends');
         } else {
           // SAFETY: connection is always GqlConnection here due to `isSimple`
           const connection = this._connection as nt.GqlConnection;
 
-          debugLog('ContractSubscription -> reliable start');
+          core.debugLog('ContractSubscription -> reliable start');
 
           if (pollingMethodChanged && this._suggestedBlockId != null) {
             this._currentBlockId = this._suggestedBlockId;
@@ -132,21 +130,21 @@ export class ContractSubscription {
 
           let nextBlockId: string;
           if (this._currentBlockId == null) {
-            debugLog('ContractSubscription -> starting reliable connection with unknown block');
+            core.debugLog('ContractSubscription -> starting reliable connection with unknown block');
 
             try {
               const latestBlock = await connection.getLatestBlock(this._address);
               this._currentBlockId = latestBlock.id;
               nextBlockId = this._currentBlockId;
             } catch (e: any) {
-              debugLog(`Failed to get latest block for ${this._address}`, e);
+              core.debugLog(`Failed to get latest block for ${this._address}`, e);
               continue;
             }
           } else {
             try {
               nextBlockId = await connection.waitForNextBlock(this._currentBlockId, this._address, NEXT_BLOCK_TIMEOUT);
             } catch (e: any) {
-              debugLog(`Failed to wait for next block for ${this._address}`);
+              core.debugLog(`Failed to wait for next block for ${this._address}`);
               continue; // retry
             }
           }
@@ -158,12 +156,12 @@ export class ContractSubscription {
             });
             this._currentBlockId = nextBlockId;
           } catch (e: any) {
-            debugLog(`Failed to handle block for ${this._address}`, e);
+            core.debugLog(`Failed to handle block for ${this._address}`, e);
           }
         }
       }
 
-      debugLog('ContractSubscription -> loop finished');
+      core.debugLog('ContractSubscription -> loop finished');
     })();
   }
 
@@ -206,7 +204,7 @@ export class ContractSubscription {
 
   public async prepareReliablePolling() {
     try {
-      if (this._connection instanceof nekoton.GqlConnection) {
+      if (this._connection instanceof core.nekoton.GqlConnection) {
         this._suggestedBlockId = (await this._connection.getLatestBlock(this._address)).id;
       }
     } catch (e: any) {
