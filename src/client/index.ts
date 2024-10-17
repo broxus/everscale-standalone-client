@@ -18,8 +18,6 @@ export { Keystore, Signer, SimpleKeystore } from './keystore';
 export { Clock } from './clock';
 export type { Ed25519KeyPair } from 'nekoton-wasm';
 
-const { ensureNekotonLoaded, nekoton } = core;
-
 /**
  * Standalone provider which is used as a fallback when browser extension is not installed
  *
@@ -157,7 +155,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
   };
 
   public static async create(params: ClientProperties = {}): Promise<EverscaleStandaloneClient> {
-    await ensureNekotonLoaded(params.initInput);
+    await core.ensureNekotonLoaded(params.initInput);
 
     // NOTE: capture client inside notify using wrapper object
     const notificationContext: { client?: EverscaleStandaloneClient } = {};
@@ -349,7 +347,7 @@ const subscribe: ProviderHandler<'subscribe'> = async (ctx, req) => {
 
   let repackedAddress: string;
   try {
-    repackedAddress = nekoton.repackAddress(address);
+    repackedAddress = core.nekoton.repackAddress(address);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -370,7 +368,7 @@ const unsubscribe: ProviderHandler<'unsubscribe'> = async (ctx, req) => {
 
   let repackedAddress: string;
   try {
-    repackedAddress = nekoton.repackAddress(address);
+    repackedAddress = core.nekoton.repackAddress(address);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -432,7 +430,7 @@ const computeStorageFee: ProviderHandler<'computeStorageFee'> = async (ctx, req)
   try {
     const config = await connectionController.use(({ data: { transport } }) => transport.getBlockchainConfig());
     const utime = timestamp != null ? timestamp : ~~(ctx.clock.nowMs / 1000);
-    return nekoton.computeStorageFee(config, state.boc, utime, masterchain || false);
+    return core.nekoton.computeStorageFee(config, state.boc, utime, masterchain || false);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -551,7 +549,7 @@ const runLocal: ProviderHandler<'runLocal'> = async (ctx, req) => {
   const signatureId = await computeSignatureId(req, ctx, withSignatureId);
 
   try {
-    const { output, code } = nekoton.runLocal(
+    const { output, code } = core.nekoton.runLocal(
       ctx.clock,
       contractState.boc,
       functionCall.abi,
@@ -582,7 +580,7 @@ const executeLocal: ProviderHandler<'executeLocal'> = async (ctx, req) => {
 
   let repackedAddress: string;
   try {
-    repackedAddress = nekoton.repackAddress(address);
+    repackedAddress = core.nekoton.repackAddress(address);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -593,9 +591,9 @@ const executeLocal: ProviderHandler<'executeLocal'> = async (ctx, req) => {
   let message: string;
   if (messageHeader.type === 'external') {
     if (payload == null || typeof payload === 'string') {
-      message = nekoton.createRawExternalMessage(repackedAddress, stateInit, payload, now + timeout).boc;
+      message = core.nekoton.createRawExternalMessage(repackedAddress, stateInit, payload, now + timeout).boc;
     } else if (messageHeader.withoutSignature === true) {
-      message = nekoton.createExternalMessageWithoutSignature(
+      message = core.nekoton.createExternalMessageWithoutSignature(
         clock,
         repackedAddress,
         payload.abi,
@@ -605,7 +603,7 @@ const executeLocal: ProviderHandler<'executeLocal'> = async (ctx, req) => {
         timeout,
       ).boc;
     } else {
-      const unsignedMessage = nekoton.createExternalMessage(
+      const unsignedMessage = core.nekoton.createExternalMessage(
         clock,
         repackedAddress,
         payload.abi,
@@ -650,9 +648,9 @@ const executeLocal: ProviderHandler<'executeLocal'> = async (ctx, req) => {
         ? undefined
         : typeof payload === 'string'
           ? payload
-          : nekoton.encodeInternalInput(payload.abi, payload.method, payload.params);
+          : core.nekoton.encodeInternalInput(payload.abi, payload.method, payload.params);
 
-    message = nekoton.encodeInternalMessage(
+    message = core.nekoton.encodeInternalMessage(
       messageHeader.sender,
       repackedAddress,
       messageHeader.bounce,
@@ -674,10 +672,10 @@ const executeLocal: ProviderHandler<'executeLocal'> = async (ctx, req) => {
         ]),
     );
 
-    const account = nekoton.makeFullAccountBoc(contractState?.boc);
+    const account = core.nekoton.makeFullAccountBoc(contractState?.boc);
     const overrideBalance = executorParams?.overrideBalance;
 
-    const result = nekoton.executeLocal(
+    const result = core.nekoton.executeLocal(
       blockchainConfig,
       account,
       message,
@@ -692,12 +690,12 @@ const executeLocal: ProviderHandler<'executeLocal'> = async (ctx, req) => {
 
     const resultVariant = result as { account: string; transaction: nt.Transaction };
     const transaction = resultVariant.transaction;
-    const newState = nekoton.parseFullAccountBoc(resultVariant.account);
+    const newState = core.nekoton.parseFullAccountBoc(resultVariant.account);
 
     let output: ever.RawTokensObject | undefined;
     try {
       if (typeof payload === 'object' && typeof payload != null) {
-        const decoded = nekoton.decodeTransaction(resultVariant.transaction, payload.abi, payload.method);
+        const decoded = core.nekoton.decodeTransaction(resultVariant.transaction, payload.abi, payload.method);
         output = decoded?.output;
       }
     } catch (_) {
@@ -724,7 +722,7 @@ const getExpectedAddress: ProviderHandler<'getExpectedAddress'> = async (_ctx, r
   requireOptionalString(req, req.params, 'publicKey');
 
   try {
-    return nekoton.getExpectedAddress(tvc, abi, workchain || 0, publicKey, initParams);
+    return core.nekoton.getExpectedAddress(tvc, abi, workchain || 0, publicKey, initParams);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -741,7 +739,7 @@ const getContractFields: ProviderHandler<'getContractFields'> = async (ctx, req)
 
   let repackedAddress: string;
   try {
-    repackedAddress = nekoton.repackAddress(address);
+    repackedAddress = core.nekoton.repackAddress(address);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -768,7 +766,7 @@ const getContractFields: ProviderHandler<'getContractFields'> = async (ctx, req)
   }
 
   try {
-    const fields = nekoton.unpackContractFields(abi, contractState.boc, allowPartial);
+    const fields = core.nekoton.unpackContractFields(abi, contractState.boc, allowPartial);
     return {
       fields,
       state: contractState,
@@ -786,7 +784,7 @@ const unpackInitData: ProviderHandler<'unpackInitData'> = async (_ctx, req) => {
   requireString(req, req.params, 'data');
 
   try {
-    const { publicKey, data: initParams } = nekoton.unpackInitData(abi, data);
+    const { publicKey, data: initParams } = core.nekoton.unpackInitData(abi, data);
     return { publicKey, initParams };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
@@ -800,7 +798,7 @@ const getBocHash: ProviderHandler<'getBocHash'> = async (_ctx, req) => {
   requireString(req, req.params, 'boc');
 
   try {
-    return { hash: nekoton.getBocHash(boc) };
+    return { hash: core.nekoton.getBocHash(boc) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -814,7 +812,7 @@ const packIntoCell: ProviderHandler<'packIntoCell'> = async (_ctx, req) => {
   requireOptional(req, req.params, 'abiVersion', requireString);
 
   try {
-    return nekoton.packIntoCell(structure as nt.AbiParam[], data, abiVersion);
+    return core.nekoton.packIntoCell(structure as nt.AbiParam[], data, abiVersion);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -830,7 +828,7 @@ const unpackFromCell: ProviderHandler<'unpackFromCell'> = async (_ctx, req) => {
   requireOptional(req, req.params, 'abiVersion', requireString);
 
   try {
-    return { data: nekoton.unpackFromCell(structure as nt.AbiParam[], boc, allowPartial, abiVersion) };
+    return { data: core.nekoton.unpackFromCell(structure as nt.AbiParam[], boc, allowPartial, abiVersion) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -843,7 +841,7 @@ const extractPublicKey: ProviderHandler<'extractPublicKey'> = async (_ctx, req) 
   requireString(req, req.params, 'boc');
 
   try {
-    return { publicKey: nekoton.extractPublicKey(boc) };
+    return { publicKey: core.nekoton.extractPublicKey(boc) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -856,7 +854,7 @@ const codeToTvc: ProviderHandler<'codeToTvc'> = async (_ctx, req) => {
   requireString(req, req.params, 'code');
 
   try {
-    const { boc, hash } = nekoton.codeToTvc(code);
+    const { boc, hash } = core.nekoton.codeToTvc(code);
     return { tvc: boc, hash };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
@@ -871,7 +869,7 @@ const mergeTvc: ProviderHandler<'mergeTvc'> = async (_ctx, req) => {
   requireString(req, req.params, 'data');
 
   try {
-    const { boc, hash } = nekoton.mergeTvc(code, data);
+    const { boc, hash } = core.nekoton.mergeTvc(code, data);
     return { tvc: boc, hash };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
@@ -885,7 +883,7 @@ const splitTvc: ProviderHandler<'splitTvc'> = async (_ctx, req) => {
   requireString(req, req.params, 'tvc');
 
   try {
-    return nekoton.splitTvc(tvc);
+    return core.nekoton.splitTvc(tvc);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -899,7 +897,7 @@ const setCodeSalt: ProviderHandler<'setCodeSalt'> = async (_ctx, req) => {
   requireString(req, req.params, 'salt');
 
   try {
-    const { boc, hash } = nekoton.setCodeSalt(code, salt);
+    const { boc, hash } = core.nekoton.setCodeSalt(code, salt);
     return { code: boc, hash };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
@@ -913,7 +911,7 @@ const getCodeSalt: ProviderHandler<'getCodeSalt'> = async (_ctx, req) => {
   requireString(req, req.params, 'code');
 
   try {
-    return { salt: nekoton.getCodeSalt(code) };
+    return { salt: core.nekoton.getCodeSalt(code) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -926,7 +924,7 @@ const encodeInternalInput: ProviderHandler<'encodeInternalInput'> = async (_ctx,
   const { abi, method, params } = req.params;
 
   try {
-    return { boc: nekoton.encodeInternalInput(abi, method, params) };
+    return { boc: core.nekoton.encodeInternalInput(abi, method, params) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -942,7 +940,7 @@ const decodeInput: ProviderHandler<'decodeInput'> = async (_ctx, req) => {
   requireBoolean(req, req.params, 'internal');
 
   try {
-    return nekoton.decodeInput(body, abi, method, internal) || null;
+    return core.nekoton.decodeInput(body, abi, method, internal) || null;
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -957,7 +955,7 @@ const decodeOutput: ProviderHandler<'decodeOutput'> = async (_ctx, req) => {
   requireMethodOrArray(req, req.params, 'method');
 
   try {
-    return nekoton.decodeOutput(body, abi, method) || null;
+    return core.nekoton.decodeOutput(body, abi, method) || null;
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -972,7 +970,7 @@ const decodeEvent: ProviderHandler<'decodeEvent'> = async (_ctx, req) => {
   requireMethodOrArray(req, req.params, 'event');
 
   try {
-    return nekoton.decodeEvent(body, abi, event) || null;
+    return core.nekoton.decodeEvent(body, abi, event) || null;
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -987,7 +985,7 @@ const decodeTransaction: ProviderHandler<'decodeTransaction'> = async (_ctx, req
 
   try {
     // NOTE: boc field is not used in decoder
-    return nekoton.decodeTransaction(transaction as nt.Transaction, abi, method) || null;
+    return core.nekoton.decodeTransaction(transaction as nt.Transaction, abi, method) || null;
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -1001,7 +999,7 @@ const decodeTransactionEvents: ProviderHandler<'decodeTransactionEvents'> = asyn
 
   try {
     // NOTE: boc field is not used in decoder
-    return { events: nekoton.decodeTransactionEvents(transaction as nt.Transaction, abi) };
+    return { events: core.nekoton.decodeTransactionEvents(transaction as nt.Transaction, abi) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -1019,7 +1017,7 @@ const verifySignature: ProviderHandler<'verifySignature'> = async (ctx, req) => 
   const signatureId = await computeSignatureId(req, ctx, withSignatureId);
 
   try {
-    return { isValid: nekoton.verifySignature(publicKey, dataHash, signature, signatureId) };
+    return { isValid: core.nekoton.verifySignature(publicKey, dataHash, signature, signatureId) };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -1038,7 +1036,7 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
 
   let repackedRecipient: string;
   try {
-    repackedRecipient = nekoton.repackAddress(recipient);
+    repackedRecipient = core.nekoton.repackAddress(recipient);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -1049,9 +1047,9 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
     try {
       if (typeof payload === 'string' || payload == null) {
         const expireAt = ~~(clock.nowMs / 1000) + timeout;
-        return nekoton.createRawExternalMessage(repackedRecipient, stateInit, payload, ~~expireAt);
+        return core.nekoton.createRawExternalMessage(repackedRecipient, stateInit, payload, ~~expireAt);
       } else {
-        return nekoton.createExternalMessageWithoutSignature(
+        return core.nekoton.createExternalMessageWithoutSignature(
           clock,
           repackedRecipient,
           payload.abi,
@@ -1070,7 +1068,7 @@ const sendUnsignedExternalMessage: ProviderHandler<'sendUnsignedExternalMessage'
     let output: ever.RawTokensObject | undefined;
     try {
       if (typeof payload === 'object' && typeof payload != null) {
-        const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
+        const decoded = core.nekoton.decodeTransaction(transaction, payload.abi, payload.method);
         output = decoded?.output;
       }
     } catch (_) {
@@ -1134,10 +1132,10 @@ const signData: ProviderHandler<'signData'> = async (ctx, req) => {
   }
 
   try {
-    const dataHash = nekoton.getDataHash(data);
+    const dataHash = core.nekoton.getDataHash(data);
     return {
       dataHash,
-      ...(await signer.sign(dataHash, signatureId).then(nekoton.extendSignature)),
+      ...(await signer.sign(dataHash, signatureId).then(core.nekoton.extendSignature)),
     };
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
@@ -1162,7 +1160,7 @@ const signDataRaw: ProviderHandler<'signDataRaw'> = async (ctx, req) => {
   }
 
   try {
-    return await signer.sign(data, signatureId).then(nekoton.extendSignature);
+    return await signer.sign(data, signatureId).then(core.nekoton.extendSignature);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -1190,8 +1188,8 @@ const sendMessage: ProviderHandler<'sendMessage'> = async (ctx, req) => {
   let repackedRecipient: string;
   let account: Account;
   try {
-    repackedSender = nekoton.repackAddress(sender);
-    repackedRecipient = nekoton.repackAddress(recipient);
+    repackedSender = core.nekoton.repackAddress(sender);
+    repackedRecipient = core.nekoton.repackAddress(recipient);
     account = await accountsStorage.getAccount(repackedSender).then(account => {
       if (account != null) {
         return account;
@@ -1215,7 +1213,7 @@ const sendMessage: ProviderHandler<'sendMessage'> = async (ctx, req) => {
           timeout: ~~timeout,
           signatureId,
         },
-        new AccountsStorageContext(clock, connectionController, nekoton, keystore),
+        new AccountsStorageContext(clock, connectionController, core.nekoton, keystore),
       );
     } catch (e: any) {
       throw invalidRequest(req, e.toString());
@@ -1272,8 +1270,8 @@ const sendMessageDelayed: ProviderHandler<'sendMessageDelayed'> = async (ctx, re
   let repackedSender: string;
   let repackedRecipient: string;
   try {
-    repackedSender = nekoton.repackAddress(sender);
-    repackedRecipient = nekoton.repackAddress(recipient);
+    repackedSender = core.nekoton.repackAddress(sender);
+    repackedRecipient = core.nekoton.repackAddress(recipient);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -1295,7 +1293,7 @@ const sendMessageDelayed: ProviderHandler<'sendMessageDelayed'> = async (ctx, re
         timeout: 60, // TEMP
         signatureId,
       },
-      new AccountsStorageContext(clock, connectionController, nekoton, keystore),
+      new AccountsStorageContext(clock, connectionController, core.nekoton, keystore),
     );
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
@@ -1338,7 +1336,7 @@ const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, 
 
   let repackedRecipient: string;
   try {
-    repackedRecipient = nekoton.repackAddress(recipient);
+    repackedRecipient = core.nekoton.repackAddress(recipient);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -1352,7 +1350,7 @@ const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, 
   const makeSignedMessage = async (timeout: number): Promise<nt.SignedMessage> => {
     let unsignedMessage: nt.UnsignedMessage;
     try {
-      unsignedMessage = nekoton.createExternalMessage(
+      unsignedMessage = core.nekoton.createExternalMessage(
         clock,
         repackedRecipient,
         payload.abi,
@@ -1379,7 +1377,7 @@ const sendExternalMessage: ProviderHandler<'sendExternalMessage'> = async (ctx, 
   const handleTransaction = (transaction: nt.Transaction) => {
     let output: ever.RawTokensObject | undefined;
     try {
-      const decoded = nekoton.decodeTransaction(transaction, payload.abi, payload.method);
+      const decoded = core.nekoton.decodeTransaction(transaction, payload.abi, payload.method);
       output = decoded?.output;
     } catch (_) {
       /* do nothing */
@@ -1439,7 +1437,7 @@ const sendExternalMessageDelayed: ProviderHandler<'sendExternalMessageDelayed'> 
 
   let repackedRecipient: string;
   try {
-    repackedRecipient = nekoton.repackAddress(recipient);
+    repackedRecipient = core.nekoton.repackAddress(recipient);
   } catch (e: any) {
     throw invalidRequest(req, e.toString());
   }
@@ -1452,7 +1450,7 @@ const sendExternalMessageDelayed: ProviderHandler<'sendExternalMessageDelayed'> 
 
   let unsignedMessage: nt.UnsignedMessage;
   try {
-    unsignedMessage = nekoton.createExternalMessage(
+    unsignedMessage = core.nekoton.createExternalMessage(
       clock,
       repackedRecipient,
       payload.abi,
@@ -1749,7 +1747,7 @@ async function makeAccountInteractionPermission(
   }
 
   const publicKey = await account.fetchPublicKey(
-    new AccountsStorageContext(ctx.clock, ctx.connectionController, nekoton),
+    new AccountsStorageContext(ctx.clock, ctx.connectionController, core.nekoton),
   );
 
   return {

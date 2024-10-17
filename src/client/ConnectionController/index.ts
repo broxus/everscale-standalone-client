@@ -10,8 +10,6 @@ import { ProtoSocket, ProtoSocketParams } from './proto';
 export { GqlSocketParams } from './gql';
 export { JrpcSocketParams } from './jrpc';
 
-const { nekoton, debugLog } = core;
-
 /**
  * @category Client
  */
@@ -82,7 +80,7 @@ function loadPreset(params: ConnectionProperties): ConnectionData {
 export async function checkConnection(params: ConnectionProperties): Promise<void> {
   const preset = loadPreset(params);
 
-  const clock = new nekoton.ClockWithOffset();
+  const clock = new core.nekoton.ClockWithOffset();
   try {
     const controller = new ConnectionController(clock);
     await controller['_connect'](preset);
@@ -120,7 +118,7 @@ export async function createConnectionController(
     try {
       const controller = new ConnectionController(clock);
       await controller.startSwitchingNetwork(preset).then(handle => handle.switch());
-      debugLog(`Successfully connected to ${preset.group}`);
+      core.debugLog(`Successfully connected to ${preset.group}`);
       return controller;
     } catch (e: any) {
       if (retry) {
@@ -128,7 +126,7 @@ export async function createConnectionController(
         await new Promise<void>(resolve => {
           setTimeout(() => resolve(), 5000);
         });
-        debugLog('Restarting connection process');
+        core.debugLog('Restarting connection process');
       } else {
         throw e;
       }
@@ -237,7 +235,7 @@ export class ConnectionController {
           case 'graphql': {
             const socket = new GqlSocket();
             const connection = await socket.connect(params.data);
-            const transport = nekoton.Transport.fromGqlConnection(connection, this._clock);
+            const transport = core.nekoton.Transport.fromGqlConnection(connection, this._clock);
 
             const transportData: InitializedTransport = {
               id: params.id,
@@ -258,7 +256,7 @@ export class ConnectionController {
           case 'jrpc': {
             const socket = new JrpcSocket();
             const connection = await socket.connect(params.data);
-            const transport = nekoton.Transport.fromJrpcConnection(connection, this._clock);
+            const transport = core.nekoton.Transport.fromJrpcConnection(connection, this._clock);
 
             const transportData: InitializedTransport = {
               id: params.id,
@@ -279,7 +277,7 @@ export class ConnectionController {
           case 'proto': {
             const socket = new ProtoSocket();
             const connection = await socket.connect(params.data);
-            const transport = nekoton.Transport.fromProtoConnection(connection, this._clock);
+            const transport = core.nekoton.Transport.fromProtoConnection(connection, this._clock);
 
             const transportData: InitializedTransport = {
               id: params.id,
@@ -305,7 +303,7 @@ export class ConnectionController {
               type: 'proxy',
               data: {
                 connection: connection,
-                transport: nekoton.Transport.fromProxyConnection(connection, this._clock),
+                transport: core.nekoton.Transport.fromProxyConnection(connection, this._clock),
               },
             };
             return {
@@ -334,29 +332,29 @@ export class ConnectionController {
   }
 
   private async _acquireTransport() {
-    debugLog('_acquireTransport');
+    core.debugLog('_acquireTransport');
 
     if (this._acquiredTransportCounter > 0) {
-      debugLog('_acquireTransport -> increase');
+      core.debugLog('_acquireTransport -> increase');
       this._acquiredTransportCounter += 1;
     } else {
       this._acquiredTransportCounter = 1;
       if (this._release != null) {
         console.warn('mutex is already acquired');
       } else {
-        debugLog('_acquireTransport -> await');
+        core.debugLog('_acquireTransport -> await');
         this._release = await this._networkMutex.acquire();
-        debugLog('_acquireTransport -> create');
+        core.debugLog('_acquireTransport -> create');
       }
     }
   }
 
   private _releaseTransport() {
-    debugLog('_releaseTransport');
+    core.debugLog('_releaseTransport');
 
     this._acquiredTransportCounter -= 1;
     if (this._acquiredTransportCounter <= 0) {
-      debugLog('_releaseTransport -> release');
+      core.debugLog('_releaseTransport -> release');
       this._release?.();
       this._release = undefined;
     }
