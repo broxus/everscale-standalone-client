@@ -152,6 +152,7 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     sendMessageDelayed,
     sendExternalMessage,
     sendExternalMessageDelayed,
+    runGetter,
   };
 
   public static async create(params: ClientProperties = {}): Promise<EverscaleStandaloneClient> {
@@ -1494,6 +1495,48 @@ const sendExternalMessageDelayed: ProviderHandler<'sendExternalMessageDelayed'> 
   };
 };
 
+const runGetter: ProviderHandler<'runGetter'> = async (ctx, req) => {
+  requireParams(req);
+
+  const { address, cachedState, getterCall, withSignatureId } = req.params;
+  requireString(req, req.params, 'address');
+  requireOptional(req, req.params, 'cachedState', requireContractState);
+  requireGetterCall(req, req.params, 'getterCall');
+  requireOptionalSignatureId(req, req.params, 'withSignatureId');
+
+  let contractState = cachedState;
+  if (contractState == null) {
+    requireConnection(req, ctx);
+    contractState = await ctx.connectionController.use(async ({ data: { transport } }) =>
+      transport.getFullContractState(address),
+    );
+  }
+
+  if (contractState == null) {
+    throw invalidRequest(req, 'Account not found');
+  }
+  if (!contractState.isDeployed || contractState.lastTransactionId == null) {
+    throw invalidRequest(req, 'Account is not deployed');
+  }
+
+  const signatureId = await computeSignatureId(req, ctx, withSignatureId);
+
+  try {
+    const { output, exitCode, isOk } = core.nekoton.runGetter(
+      ctx.clock,
+      contractState.boc,
+      getterCall.method,
+      getterCall.inputStructure,
+      getterCall.outputStructure,
+      getterCall.inputData,
+      signatureId,
+    );
+    return { output, exitCode, isOk };
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
 function requireKeystore(req: any, context: Context): asserts context is Context & { keystore: Keystore } {
   if (context.keystore == null) {
     throw invalidRequest(req, 'Keystore not found');
@@ -1699,6 +1742,19 @@ function requireFunctionCall<O, P extends keyof O>(
   requireString(req, property, 'abi');
   requireString(req, property, 'method');
   requireObject(req, property, 'params');
+}
+
+function requireGetterCall<O, P extends keyof O>(
+  req: ever.RawProviderRequest<ever.ProviderMethod>,
+  object: O,
+  key: P,
+) {
+  requireObject(req, object, key);
+  const property = object[key] as unknown as ever.GetterCall<string>;
+  requireString(req, property, 'method');
+  requireArray(req, property, 'inputStructure');
+  requireArray(req, property, 'outputStructure');
+  requireObject(req, property, 'inputData');
 }
 
 function requireOptionalRawFunctionCall<O, P extends keyof O>(
