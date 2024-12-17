@@ -1,6 +1,6 @@
 {
   "name": "everscale-standalone-client",
-  "version": "2.1.28-beta.0",
+  "version": "2.1.28-beta.1",
   "repository": "https://github.com/broxus/everscale-standalone-client",
   "scripts": {
     "build": "tsc",
@@ -27,7 +27,7 @@
     "events": "^3.3.0",
     "everscale-inpage-provider": "0.4.1-beta.0",
     "fast-safe-stringify": "^2.1.1",
-    "nekoton-wasm": "npm:nekoton-wasm-beta@1.5.0",
+    "nekoton-wasm": "npm:nekoton-wasm-beta@1.5.1",
     "node-fetch": "^2.6.7"
   },
   "types": "index.d.ts",
