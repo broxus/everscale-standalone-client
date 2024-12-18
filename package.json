@@ -1,11 +1,11 @@
 {
   "name": "everscale-standalone-client",
-  "version": "2.1.28-beta.1",
+  "version": "2.1.28-beta.2",
   "repository": "https://github.com/broxus/everscale-standalone-client",
   "scripts": {
     "build": "tsc",
     "publish": "npm run copy && cd dist && npm publish",
-    "publish-beta": "npm run copy && cd dist && npm publish --tag beta",
+    "publish:beta": "npm run copy && cd dist && npm publish --tag beta",
     "preview": "npm run build && cp package.json dist/package.json && cp README.md dist/README.md && cp LICENSE dist/LICENSE",
     "copy": "cp package.json dist/package.json && cp README.md dist/README.md && cp LICENSE dist/LICENSE",
     "lint": "npx eslint ."
@@ -27,7 +27,7 @@
     "events": "^3.3.0",
     "everscale-inpage-provider": "0.4.1-beta.0",
     "fast-safe-stringify": "^2.1.1",
-    "nekoton-wasm": "npm:nekoton-wasm-beta@1.5.1",
+    "nekoton-wasm": "npm:nekoton-wasm-beta@1.5.2",
     "node-fetch": "^2.6.7"
   },
   "types": "index.d.ts",
