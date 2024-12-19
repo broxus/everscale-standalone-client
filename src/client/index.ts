@@ -105,6 +105,7 @@ export const SUPPORTED_PERMISSIONS: ever.Permission[] = ['basic', 'accountIntera
  * @category Client
  */
 export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.Provider {
+  readonly _core = core;
   private readonly _context: Context;
   private _handlers: { [K in ever.ProviderMethod]?: ProviderHandler<K> } = {
     requestPermissions,
