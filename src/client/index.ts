@@ -106,7 +106,13 @@ export const SUPPORTED_PERMISSIONS: ever.Permission[] = ['basic', 'accountIntera
  */
 export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.Provider {
   private readonly _context: Context;
-  private _handlers: { [K in ever.ProviderMethod]?: ProviderHandler<K> } = {
+  private _handlers: { [K in ever.ProviderMethod]: ProviderHandler<K> } = {
+    addAsset: () => { throw new UnsupportedMethodError('addAsset'); },
+    encryptData: () => { throw new UnsupportedMethodError('encryptData'); },
+    decryptData: () => { throw new UnsupportedMethodError('decryptData'); },
+    estimateFees: () => { throw new UnsupportedMethodError('estimateFees'); },
+    addNetwork: () => { throw new UnsupportedMethodError('addNetwork'); },
+    changeNetwork: () => { throw new UnsupportedMethodError('changeNetwork'); },
     requestPermissions,
     changeAccount,
     disconnect,
@@ -142,16 +148,13 @@ export class EverscaleStandaloneClient extends SafeEventEmitter implements ever.
     decodeTransactionEvents,
     verifySignature,
     sendUnsignedExternalMessage,
-    // addAsset, // not supported
     signData,
     signDataRaw,
-    // encryptData, // not supported
-    // decryptData, // not supported
-    // estimateFees, // not supported
     sendMessage,
     sendMessageDelayed,
     sendExternalMessage,
     sendExternalMessageDelayed,
+    runGetter,
   };
 
   public static async create(params: ClientProperties = {}): Promise<EverscaleStandaloneClient> {
@@ -1494,6 +1497,47 @@ const sendExternalMessageDelayed: ProviderHandler<'sendExternalMessageDelayed'> 
   };
 };
 
+const runGetter: ProviderHandler<'runGetter'> = async (ctx, req) => {
+  requireParams(req);
+
+  const { address, cachedState, getterCall, withSignatureId } = req.params;
+  requireString(req, req.params, 'address');
+  requireOptional(req, req.params, 'cachedState', requireContractState);
+  requireGetterCall(req, req.params, 'getterCall');
+  requireOptionalSignatureId(req, req.params, 'withSignatureId');
+
+  let contractState = cachedState;
+  if (contractState == null) {
+    requireConnection(req, ctx);
+    contractState = await ctx.connectionController.use(async ({ data: { transport } }) =>
+      transport.getFullContractState(address),
+    );
+  }
+
+  if (contractState == null) {
+    throw invalidRequest(req, 'Account not found');
+  }
+  if (!contractState.isDeployed || contractState.lastTransactionId == null) {
+    throw invalidRequest(req, 'Account is not deployed');
+  }
+
+  const signatureId = await computeSignatureId(req, ctx, withSignatureId);
+
+  try {
+    const { output, code } = core.nekoton.runGetter(
+      ctx.clock,
+      contractState.boc,
+      getterCall.abi,
+      getterCall.getter,
+      getterCall.params,
+      signatureId,
+    );
+    return { output, code };
+  } catch (e: any) {
+    throw invalidRequest(req, e.toString());
+  }
+};
+
 function requireKeystore(req: any, context: Context): asserts context is Context & { keystore: Keystore } {
   if (context.keystore == null) {
     throw invalidRequest(req, 'Keystore not found');
@@ -1701,6 +1745,18 @@ function requireFunctionCall<O, P extends keyof O>(
   requireObject(req, property, 'params');
 }
 
+function requireGetterCall<O, P extends keyof O>(
+  req: ever.RawProviderRequest<ever.ProviderMethod>,
+  object: O,
+  key: P,
+) {
+  requireObject(req, object, key);
+  const property = object[key] as unknown as ever.GetterCall<string>;
+  requireString(req, property, 'abi');
+  requireString(req, property, 'getter');
+  requireObject(req, property, 'params');
+}
+
 function requireOptionalRawFunctionCall<O, P extends keyof O>(
   req: ever.RawProviderRequest<ever.ProviderMethod>,
   object: O,
@@ -1811,3 +1867,9 @@ const stringifyReplacer = (_: unknown, value: unknown): unknown => {
   }
   return value;
 };
+
+class UnsupportedMethodError extends Error {
+  constructor(method: string) {
+    super(`Method "${method}" is not supported`);
+  }
+}
