@@ -1,10 +1,6 @@
-/* @ts-ignore */
-const nekoton = require('nekoton-wasm');
-/* @ts-ignore */
+const nekoton = require('nekoton-wasm/node');
 const fetch = require('node-fetch');
-/* @ts-ignore */
 const http = require('http');
-/* @ts-ignore */
 const https = require('https');
 
 const httpAgent = new http.Agent({ keepAlive: true });

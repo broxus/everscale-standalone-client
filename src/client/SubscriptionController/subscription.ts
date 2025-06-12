@@ -91,7 +91,7 @@ export class ContractSubscription {
             const timerHandle = setTimeout(() => {
               this._refreshTimer = undefined;
               resolve();
-            }, pollingInterval);
+            }, pollingInterval) as any;
             this._refreshTimer = [timerHandle, resolve];
           });
 
