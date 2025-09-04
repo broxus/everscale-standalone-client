@@ -1,9 +1,11 @@
 {
   "name": "everscale-standalone-client",
-  "version": "2.3.0",
+  "version": "2.4.0-beta.0",
   "repository": "https://github.com/broxus/everscale-standalone-client",
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build:cjs && npm run build:esm",
+    "build:cjs": "tsc --module CommonJS --outDir dist/cjs --declaration false",
+    "build:esm": "tsc --module ESNext --outDir dist/esm --declaration --declarationDir dist/esm",
     "lint": "npx eslint ."
   },
   "author": "",
@@ -27,18 +29,33 @@
     "nekoton-wasm": "^1.5.2",
     "node-fetch": "^2.6.7"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
   "exports": {
     ".": {
-      "default": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/esm/index.d.ts"
+    },
+    "./client/*": {
+      "import": "./dist/esm/client/*",
+      "require": "./dist/cjs/client/*",
+      "types": "./dist/esm/client/*"
+    },
+    "./core": {
+      "import": "./dist/esm/core.js",
+      "require": "./dist/cjs/core.js",
+      "types": "./dist/esm/core.d.ts"
     },
     "./nodejs": {
-      "require": "./dist/nodejs.js",
-      "default": "./dist/nodejs.js",
-      "types": "./dist/nodejs.d.ts"
-    }
+      "import": "./dist/esm/nodejs.js",
+      "require": "./dist/cjs/nodejs.js",
+      "types": "./dist/esm/nodejs.d.ts"
+    },
+    "./package.json": "./package.json"
   },
-  "files": ["./dist/*"]
+  "files": [
+    "./dist/*"
+  ]
 }
