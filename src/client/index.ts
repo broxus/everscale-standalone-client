@@ -526,8 +526,9 @@ const findTransaction: ProviderHandler<'findTransaction'> = async (ctx, req) => 
 
 const runLocal: ProviderHandler<'runLocal'> = async (ctx, req) => {
   requireParams(req);
+  requireConnection(req, ctx);
 
-  const { address, cachedState, responsible, functionCall, withSignatureId } = req.params;
+  const { address, cachedState, responsible, functionCall, withSignatureId, libraries } = req.params;
   requireString(req, req.params, 'address');
   requireOptional(req, req.params, 'cachedState', requireContractState);
   requireOptionalBoolean(req, req.params, 'responsible');
@@ -536,7 +537,6 @@ const runLocal: ProviderHandler<'runLocal'> = async (ctx, req) => {
 
   let contractState = cachedState;
   if (contractState == null) {
-    requireConnection(req, ctx);
     contractState = await ctx.connectionController.use(async ({ data: { transport } }) =>
       transport.getFullContractState(address),
     );
@@ -552,14 +552,18 @@ const runLocal: ProviderHandler<'runLocal'> = async (ctx, req) => {
   const signatureId = await computeSignatureId(req, ctx, withSignatureId);
 
   try {
-    const { output, code } = core.nekoton.runLocal(
-      ctx.clock,
-      contractState.boc,
-      functionCall.abi,
-      functionCall.method,
-      functionCall.params,
-      responsible || false,
-      signatureId,
+    const { output, code } = await ctx.connectionController.use(async ({ data: { transport } }) =>
+      core.nekoton.runLocalWithLibs(
+        transport,
+        contractState.boc,
+        functionCall.abi,
+        functionCall.method,
+        functionCall.params,
+        libraries ?? {},
+        5, // retry_count
+        responsible || false,
+        signatureId,
+      ),
     );
     return { output, code };
   } catch (e: any) {
@@ -1500,7 +1504,7 @@ const sendExternalMessageDelayed: ProviderHandler<'sendExternalMessageDelayed'> 
 const runGetter: ProviderHandler<'runGetter'> = async (ctx, req) => {
   requireParams(req);
 
-  const { address, cachedState, getterCall, withSignatureId } = req.params;
+  const { address, cachedState, getterCall, withSignatureId, libraries } = req.params;
   requireString(req, req.params, 'address');
   requireOptional(req, req.params, 'cachedState', requireContractState);
   requireGetterCall(req, req.params, 'getterCall');
@@ -1530,6 +1534,7 @@ const runGetter: ProviderHandler<'runGetter'> = async (ctx, req) => {
       getterCall.abi,
       getterCall.getter,
       getterCall.params,
+      libraries ?? {},
       signatureId,
     );
     return { output, code };
