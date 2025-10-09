@@ -1,6 +1,6 @@
 {
   "name": "everscale-standalone-client",
-  "version": "2.4.0-beta.0",
+  "version": "2.4.0-beta.1",
   "repository": "https://github.com/broxus/everscale-standalone-client",
   "scripts": {
     "build": "npm run build:cjs && npm run build:esm",
