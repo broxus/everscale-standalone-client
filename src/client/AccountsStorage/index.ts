@@ -1,5 +1,5 @@
 import type * as ever from 'everscale-inpage-provider';
-import { AbiVersion, Address } from 'everscale-inpage-provider';
+import { AbiVersion, Address, SignatureContext } from 'everscale-inpage-provider';
 import type * as nt from 'nekoton-wasm';
 
 import { Keystore, Signer } from '../keystore';
@@ -82,9 +82,9 @@ export type PrepareMessageParams = {
    */
   timeout: number;
   /**
-   * Signature id for the current network
+   * Signature context for the current network
    */
-  signatureId?: number;
+  signatureContext: SignatureContext;
 };
 
 /**
@@ -96,8 +96,7 @@ export class AccountsStorageContext {
     private readonly connectionController: ConnectionController,
     private readonly nekoton: typeof nt,
     private readonly keystore?: Keystore,
-  ) {
-  }
+  ) {}
 
   public async getSigner(publicKey: string): Promise<Signer> {
     if (this.keystore == null) {
@@ -137,8 +136,8 @@ export class AccountsStorageContext {
   }
 
   public packIntoCell(args: { structure: nt.AbiParam[]; data: nt.TokensObject; abiVersion?: AbiVersion }): {
-    boc: string,
-    hash: string,
+    boc: string;
+    hash: string;
   } {
     return this.nekoton.packIntoCell(args.structure, args.data, args.abiVersion);
   }
@@ -183,7 +182,7 @@ export class AccountsStorageContext {
     method: string;
     params: nt.TokensObject;
     stateInit?: string;
-    signatureId?: number;
+    signatureContext?: SignatureContext;
   }): Promise<nt.SignedMessage> {
     const unsignedMessage = this.nekoton.createExternalMessage(
       this.clock,
@@ -197,7 +196,7 @@ export class AccountsStorageContext {
     );
 
     try {
-      const signature = await args.signer.sign(unsignedMessage.hash, args.signatureId);
+      const signature = await args.signer.sign(unsignedMessage.hash, args.signatureContext);
       return unsignedMessage.sign(signature);
     } finally {
       unsignedMessage.free();

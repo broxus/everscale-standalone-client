@@ -103,7 +103,7 @@ export class EverWalletAccount implements Account {
       method,
       params,
       stateInit,
-      signatureId: args.signatureId,
+      signatureContext: args.signatureContext,
     });
   }
 
@@ -139,7 +139,7 @@ export class EverWalletAccount implements Account {
   }
 }
 
-const makeStateInit = (publicKey: BigNumber, nonce?: number): { boc: string, hash: string } => {
+const makeStateInit = (publicKey: BigNumber, nonce?: number): { boc: string; hash: string } => {
   let params: nt.AbiParam[], tokens: nt.TokensObject;
   if (nonce != null) {
     params = DATA_STRUCTURE_EXT;

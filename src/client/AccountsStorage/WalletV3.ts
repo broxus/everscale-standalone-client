@@ -68,7 +68,7 @@ export class WalletV3Account implements Account {
     };
 
     const hash = ctx.packIntoCell({ structure: UNSIGNED_TRANSFER_STRUCTURE, data: params }).hash;
-    const signature = await signer.sign(hash, args.signatureId);
+    const signature = await signer.sign(hash, args.signatureContext);
     const { signatureParts } = ctx.extendSignature(signature);
 
     params.signatureHigh = signatureParts.high;
@@ -139,7 +139,7 @@ const parseInitData = (ctx: AccountsStorageContext, boc: string): { seqno: numbe
   };
 };
 
-const makeStateInit = (publicKey: BigNumber): { boc: string, hash: string } => {
+const makeStateInit = (publicKey: BigNumber): { boc: string; hash: string } => {
   const data = core.nekoton.packIntoCell(DATA_STRUCTURE, {
     seqno: 0,
     walletId: WALLET_ID,
