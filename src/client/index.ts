@@ -1731,11 +1731,11 @@ function requireOptionalSignatureContext<O, P extends keyof O>(
       case 'empty':
         break;
       case 'signatureId': {
-        requireOptionalString(req, property, 'globalId');
+        requireOptionalNumber(req, property, 'globalId');
         break;
       }
       case 'signatureDomainL2': {
-        requireOptionalString(req, property, 'globalId');
+        requireOptionalNumber(req, property, 'globalId');
         break;
       }
       default:
