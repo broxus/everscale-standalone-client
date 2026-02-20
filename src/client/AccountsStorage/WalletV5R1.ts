@@ -91,7 +91,7 @@ export class WalletV5R1Account implements Account {
     };
 
     const signature = core.nekoton.extendSignature(
-      await signer.sign(core.nekoton.packIntoCell(DATA_TO_SIGN, params, '2.3').hash, args.signatureId),
+      await signer.sign(core.nekoton.packIntoCell(DATA_TO_SIGN, params, '2.3').hash, args.signatureContext),
     );
 
     const data: nt.TokensObject = {
