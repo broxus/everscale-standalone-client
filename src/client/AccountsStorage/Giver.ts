@@ -88,7 +88,7 @@ export class GiverAccount implements Account {
         value: args.amount,
         bounce: args.bounce,
       },
-      signatureId: args.signatureId,
+      signatureContext: args.signatureContext,
     });
   }
 }

@@ -1,5 +1,6 @@
 import type * as nt from 'nekoton-wasm';
 import core from '../core';
+import type { SignatureContext } from 'everscale-inpage-provider';
 
 /**
  * @category Keystore
@@ -25,7 +26,7 @@ export interface Signer {
    * Sign data as is and return a signature
    * @param rawData - hex or base64 encoded data
    */
-  sign(rawData: string, signatureId?: number): Promise<string>;
+  sign(rawData: string, signatureContext?: SignatureContext): Promise<string>;
 }
 
 /**
@@ -119,7 +120,7 @@ class SimpleSigner implements Signer {
 
   readonly publicKey: string = this.keyPair.publicKey;
 
-  async sign(rawData: string, signatureId?: number): Promise<string> {
-    return core.nekoton.ed25519_sign(this.keyPair.secretKey, rawData, signatureId);
+  async sign(rawData: string, signatureContext?: SignatureContext): Promise<string> {
+    return core.nekoton.ed25519_sign(this.keyPair.secretKey, rawData, signatureContext || { type: 'empty' });
   }
 }
