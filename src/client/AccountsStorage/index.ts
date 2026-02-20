@@ -11,6 +11,7 @@ export { GenericAccount, MsigAccount } from './Generic';
 export { WalletV3Account } from './WalletV3';
 export { HighloadWalletV2 } from './HighloadWalletV2';
 export { EverWalletAccount } from './EverWallet';
+export { WalletV5R1Account } from './WalletV5R1';
 
 /**
  * @category AccountsStorage
