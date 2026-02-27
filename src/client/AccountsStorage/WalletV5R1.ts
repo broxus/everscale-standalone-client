@@ -83,7 +83,7 @@ export class WalletV5R1Account implements Account {
 
     const params: nt.TokensObject = {
       op: PREFIX.SIGNED_EXTERNAL,
-      walletId: this.nonce || 0,
+      walletId: this.nonce || 0x7fffff11,
       validUntil,
       seqno,
       actions,
@@ -95,7 +95,7 @@ export class WalletV5R1Account implements Account {
     );
 
     const data: nt.TokensObject = {
-      walletId: this.nonce || 0,
+      walletId: this.nonce || 0x7fffff11,
       validUntil,
       seqno,
       actions,
@@ -149,7 +149,7 @@ const makeStateInit = (publicKey: BigNumber, nonce?: number): { boc: string; has
   const tokens: nt.TokensObject = {
     isSignatureAllowed: true,
     seqno: 0,
-    walletId: nonce || 0,
+    walletId: nonce || 0x7fffff11,
     publicKey: publicKey.toFixed(0),
     extensions: null,
   };
